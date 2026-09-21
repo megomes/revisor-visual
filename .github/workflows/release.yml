@@ -83,8 +83,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          {
+            echo "Firefox: baixe o \`.xpi\` e abra no navegador, ele instala sozinho."
+            echo
+            echo "Chrome: o \`.zip\` e para subir na Chrome Web Store como unlisted."
+          } > notes.md
           gh release create "$GITHUB_REF_NAME" \
             --title "Revisor Visual ${{ steps.ver.outputs.v }}" \
-            --notes "Firefox: baixe o \`.xpi\` e abra no navegador, ele instala sozinho.
-Chrome: o \`.zip\` e para subir na Chrome Web Store como unlisted." \
+            --notes-file notes.md \
             dist/*.zip $(ls dist/*.xpi 2>/dev/null)
