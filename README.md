@@ -7,12 +7,12 @@ Você liga o modo, segura Alt e clica no elemento que está errado. A extensão
 reconhece o que você selecionou, desenha o contorno em volta dele e abre uma
 caixa para você escrever.
 
-![Caixa de comentário aberta sobre um título, com o painel da extensão à direita](docs/comentario.png)
+![Caixa de comentário aberta sobre um título de uma página borrada, com o painel da extensão à direita](docs/comentario.png)
 
 No fim, **Copiar tudo** põe na área de transferência um texto pronto para colar no
 Claude. Os marcadores laranjas ficam na página e o painel lista os comentários.
 
-![Página com dois comentários marcados e o painel listando os dois](docs/painel.png)
+![Página borrada com dois marcadores laranjas, e o painel da extensão listando os dois comentários](docs/painel.png)
 
 Funciona em arquivo local (`file://`), em `localhost` e em qualquer site. Serve
 para HTML estático e para página gerada por React.

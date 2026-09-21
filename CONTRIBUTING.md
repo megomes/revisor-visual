@@ -86,5 +86,9 @@ for s in 1 2; do "$CH" --headless --disable-gpu --hide-scrollbars \
 mv docs/shot-1.png docs/comentario.png && mv docs/shot-2.png docs/painel.png
 ```
 
-Funciona porque o `content.js` tem caminho para quando não há extensão: ele cai
+Funciona porque o `content.js` tem caminho para quando não há extensão. Ele cai
 para `localStorage` e expõe `window.__rv.setActive()`.
+
+O conteúdo da página sai borrado de propósito, por um `filter: blur(7px)` aplicado
+só no `.wrap`. A interface da extensão vive fora dele, num host com shadow DOM, e
+por isso continua nítida. Para capturar sem o blur, acrescente `&anon=0` na URL.

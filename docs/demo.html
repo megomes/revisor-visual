@@ -5,6 +5,8 @@
  *{box-sizing:border-box}
  body{margin:0;font:16px/1.6 -apple-system,"Segoe UI",Roboto,sans-serif;color:var(--tinta);background:var(--fundo)}
  .wrap{max-width:860px;margin:0 auto;padding:48px 32px 80px}
+ /* anonimiza o conteudo da pagina no screenshot, sem tocar na extensao */
+ body.anon .wrap{filter:blur(7px);-webkit-filter:blur(7px)}
  h1{font-size:30px;line-height:1.25;margin:0 0 6px}
  .sub{color:var(--fraco);font-size:14px;margin:0 0 40px}
  section{padding:28px 0;border-top:1px solid var(--linha)}
@@ -22,7 +24,7 @@
 </style></head><body>
 <div class="wrap">
   <h1>AS-IS da Máquina de Localização</h1>
-  <p class="sub">Reasset Capital · base do CRM em 2026-09-02</p>
+  <p class="sub">Documento de exemplo · 2026-09-02</p>
 
   <section id="diagnostico">
     <h2 class="sec-title">Cobertura por safra</h2>
@@ -48,6 +50,7 @@
   </section>
 </div>
 <script>
+ if (new URLSearchParams(location.search).get('anon') !== '0') document.body.classList.add('anon');
  /* estado inicial: modo ligado e clique simples anota, para a demonstração */
  try { localStorage.setItem('rv_state', JSON.stringify({ active:true, sticky:false, modifier:'alt', items:[], nextN:1, panelPos:null, minimized:false })); } catch(e){}
 </script>
