@@ -78,16 +78,29 @@ jobs:
             dist/*.zip
             dist/*.xpi
 
+      - name: Montar a nota do Release
+        env:
+          CWS_URL: ${{ vars.CWS_URL }}
+        run: |
+          python3 - <<'PY'
+          import os, glob, pathlib
+          ver = "${{ steps.ver.outputs.v }}"
+          xpi = sorted(glob.glob("dist/*.xpi"))
+          xpi = os.path.basename(xpi[0]) if xpi else "(nao gerado nesta versao)"
+          cws = os.environ.get("CWS_URL", "").strip()
+          src = ".github/release-chrome-loja.md" if cws else ".github/release-chrome-manual.md"
+          chrome = pathlib.Path(src).read_text(encoding="utf-8").replace("__CWS_URL__", cws)
+          notes = pathlib.Path(".github/release-notes.md").read_text(encoding="utf-8")
+          notes = notes.replace("__CHROME__", chrome).replace("__XPI__", xpi).replace("__VERSION__", ver)
+          pathlib.Path("notes.md").write_text(notes, encoding="utf-8")
+          print(notes)
+          PY
+
       - name: Publicar no Release
         if: github.ref_type == 'tag'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          {
-            echo "Firefox: baixe o \`.xpi\` e abra no navegador, ele instala sozinho."
-            echo
-            echo "Chrome: o \`.zip\` e para subir na Chrome Web Store como unlisted."
-          } > notes.md
           gh release create "$GITHUB_REF_NAME" \
             --title "Revisor Visual ${{ steps.ver.outputs.v }}" \
             --notes-file notes.md \
