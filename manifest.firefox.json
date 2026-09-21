@@ -3,10 +3,17 @@
   "name": "Revisor Visual",
   "version": "1.0.0",
   "description": "Marca elementos de uma pagina e exporta os comentarios como prompt pronto para o Claude Code.",
-  "permissions": ["storage", "scripting"],
-  "host_permissions": ["<all_urls>"],
+  "permissions": [
+    "storage",
+    "scripting"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
   "background": {
-    "scripts": ["background.js"]
+    "scripts": [
+      "background.js"
+    ]
   },
   "action": {
     "default_title": "Revisor Visual (Alt+Shift+R)",
@@ -24,22 +31,33 @@
   },
   "content_scripts": [
     {
-      "matches": ["<all_urls>"],
-      "js": ["content.js"],
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "content.js"
+      ],
       "run_at": "document_idle",
       "all_frames": false
     }
   ],
   "commands": {
     "toggle-review": {
-      "suggested_key": { "default": "Alt+Shift+R" },
+      "suggested_key": {
+        "default": "Alt+Shift+R"
+      },
       "description": "Ligar ou desligar o modo de revisao"
     }
   },
   "browser_specific_settings": {
     "gecko": {
       "id": "revisor-visual@reasset.local",
-      "strict_min_version": "115.0"
+      "strict_min_version": "115.0",
+      "data_collection_permissions": {
+        "required": [
+          "none"
+        ]
+      }
     }
   }
 }
