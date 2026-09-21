@@ -52,7 +52,6 @@ jobs:
 
       - name: Assinar o .xpi no AMO (unlisted)
         id: sign
-        continue-on-error: true
         env:
           AMO_JWT_ISSUER: ${{ secrets.AMO_JWT_ISSUER }}
           AMO_JWT_SECRET: ${{ secrets.AMO_JWT_SECRET }}
@@ -61,6 +60,7 @@ jobs:
             echo "::warning::Sem credenciais do AMO. Pulando a assinatura, o .xpi nao sai."
             exit 0
           fi
+          set -o pipefail
           npx --yes web-ext@latest sign \
             --source-dir dist/firefox \
             --artifacts-dir dist \
