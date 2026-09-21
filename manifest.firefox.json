@@ -51,7 +51,7 @@
   },
   "browser_specific_settings": {
     "gecko": {
-      "id": "revisor-visual@reasset.local",
+      "id": "revisor-visual@matheuservilha.github.io",
       "strict_min_version": "115.0",
       "data_collection_permissions": {
         "required": [
