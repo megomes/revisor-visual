@@ -1,0 +1,90 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Definir versao a partir da tag
+        id: ver
+        run: |
+          V="${GITHUB_REF_NAME#v}"
+          [ "$GITHUB_REF_TYPE" = tag ] || V="$(node -p "require('./manifest.json').version")"
+          echo "v=$V" >> "$GITHUB_OUTPUT"
+          echo "Versao: $V"
+
+      - name: Gravar versao nos dois manifests
+        run: |
+          for f in manifest.json manifest.firefox.json; do
+            node -e "
+              const fs=require('fs');
+              const m=JSON.parse(fs.readFileSync('$f','utf8'));
+              m.version='${{ steps.ver.outputs.v }}';
+              fs.writeFileSync('$f', JSON.stringify(m,null,2)+'\n');
+            "
+          done
+
+      - name: Montar pacote do Chrome
+        run: |
+          mkdir -p dist/chrome
+          cp -r icons background.js content.js dist/chrome/
+          cp manifest.json dist/chrome/manifest.json
+          (cd dist/chrome && zip -qr ../revisor-visual-chrome-${{ steps.ver.outputs.v }}.zip .)
+
+      - name: Montar pasta do Firefox
+        run: |
+          mkdir -p dist/firefox
+          cp -r icons background.js content.js dist/firefox/
+          cp manifest.firefox.json dist/firefox/manifest.json
+
+      - name: Assinar o .xpi no AMO (unlisted)
+        id: sign
+        continue-on-error: true
+        env:
+          AMO_JWT_ISSUER: ${{ secrets.AMO_JWT_ISSUER }}
+          AMO_JWT_SECRET: ${{ secrets.AMO_JWT_SECRET }}
+        run: |
+          if [ -z "$AMO_JWT_ISSUER" ]; then
+            echo "::warning::Sem credenciais do AMO. Pulando a assinatura, o .xpi nao sai."
+            exit 0
+          fi
+          npx --yes web-ext@latest sign \
+            --source-dir dist/firefox \
+            --artifacts-dir dist \
+            --channel unlisted \
+            --api-key "$AMO_JWT_ISSUER" \
+            --api-secret "$AMO_JWT_SECRET"
+
+      - name: Conferir o que saiu
+        run: ls -lh dist/*.zip dist/*.xpi 2>/dev/null || ls -lh dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pacotes
+          path: |
+            dist/*.zip
+            dist/*.xpi
+
+      - name: Publicar no Release
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --title "Revisor Visual ${{ steps.ver.outputs.v }}" \
+            --notes "Firefox: baixe o \`.xpi\` e abra no navegador, ele instala sozinho.
+Chrome: o \`.zip\` e para subir na Chrome Web Store como unlisted." \
+            dist/*.zip $(ls dist/*.xpi 2>/dev/null)
