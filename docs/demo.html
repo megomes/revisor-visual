@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><title>AS-IS da Máquina de Localização</title>
+<style>
+ :root{--tinta:#1c1c1e;--fraco:#6b6b70;--linha:#e4e4e7;--fundo:#fff;--azul:#2b5cff}
+ *{box-sizing:border-box}
+ body{margin:0;font:16px/1.6 -apple-system,"Segoe UI",Roboto,sans-serif;color:var(--tinta);background:var(--fundo)}
+ .wrap{max-width:860px;margin:0 auto;padding:48px 32px 80px}
+ h1{font-size:30px;line-height:1.25;margin:0 0 6px}
+ .sub{color:var(--fraco);font-size:14px;margin:0 0 40px}
+ section{padding:28px 0;border-top:1px solid var(--linha)}
+ .sec-title{font-size:20px;margin:0 0 14px}
+ p{margin:0 0 14px}
+ .nums{display:flex;gap:14px;margin:18px 0 6px}
+ .card{flex:1;border:1px solid var(--linha);border-radius:10px;padding:16px}
+ .card .v{font-size:26px;font-weight:650;letter-spacing:-.02em}
+ .card .l{font-size:12px;color:var(--fraco);margin-top:4px}
+ table{border-collapse:collapse;width:100%;font-size:14px;margin-top:10px}
+ th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--linha)}
+ th{font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--fraco)}
+ .tag{display:inline-block;font-size:12px;padding:2px 8px;border-radius:99px;background:#e9f7ee;color:#1a7f434d;color:#1a7f43}
+ .btn{display:inline-block;margin-top:18px;background:var(--azul);color:#fff;border:0;border-radius:8px;padding:10px 18px;font-size:14px;cursor:pointer}
+</style></head><body>
+<div class="wrap">
+  <h1>AS-IS da Máquina de Localização</h1>
+  <p class="sub">Reasset Capital · base do CRM em 2026-09-02</p>
+
+  <section id="diagnostico">
+    <h2 class="sec-title">Cobertura por safra</h2>
+    <p>A localização de credores hoje depende de três fontes que não conversam entre si. O advogado consulta cada uma na mão e consolida numa planilha própria, que não volta para o CRM.</p>
+    <div class="nums">
+      <div class="card"><div class="v">1.180</div><div class="l">credores no quadro geral</div></div>
+      <div class="card"><div class="v">412</div><div class="l">localizados</div></div>
+      <div class="card"><div class="v">35%</div><div class="l">taxa de cobertura</div></div>
+    </div>
+  </section>
+
+  <section id="fontes">
+    <h2 class="sec-title">Fontes consultadas</h2>
+    <table>
+      <thead><tr><th>Fonte</th><th>Credores</th><th>Última carga</th><th>Estado</th></tr></thead>
+      <tbody>
+        <tr><td>Receita Federal</td><td>1.180</td><td>2026-09-02</td><td><span class="tag">ativa</span></td></tr>
+        <tr><td>Serasa</td><td>640</td><td>2026-08-28</td><td><span class="tag">ativa</span></td></tr>
+        <tr><td>Planilha do advogado</td><td>412</td><td>manual</td><td><span class="tag">ativa</span></td></tr>
+      </tbody>
+    </table>
+    <button class="btn" id="exportar">Exportar consolidado</button>
+  </section>
+</div>
+<script>
+ /* estado inicial: modo ligado e clique simples anota, para a demonstração */
+ try { localStorage.setItem('rv_state', JSON.stringify({ active:true, sticky:false, modifier:'alt', items:[], nextN:1, panelPos:null, minimized:false })); } catch(e){}
+</script>
+<script src="../content.js"></script>
+<script>
+ const shot = new URLSearchParams(location.search).get('shot') || '1';
+ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+ const shadow = () => [...document.querySelectorAll('*')].find(e => e.shadowRoot)?.shadowRoot;
+
+ async function anotar(sel, texto) {
+   const el = document.querySelector(sel);
+   const r = el.getBoundingClientRect();
+   const opt = {bubbles:true, cancelable:true, view:window, altKey:true,
+     clientX: r.left + r.width/2, clientY: r.top + r.height/2};
+   el.dispatchEvent(new MouseEvent('mousemove', opt));
+   el.dispatchEvent(new MouseEvent('click', opt));
+   await sleep(500);
+   const sr = shadow(); if (!sr) return false;
+   const ta = sr.querySelector('textarea'); if (!ta) return false;
+   if (texto === null) return true;              /* deixa a caixa aberta */
+   ta.value = texto;
+   ta.dispatchEvent(new Event('input', {bubbles:true}));
+   ta.dispatchEvent(new KeyboardEvent('keydown', {key:'Enter', bubbles:true, cancelable:true}));
+   await sleep(400);
+   return true;
+ }
+
+ (async () => {
+   await sleep(1200);
+   if (shot === '1') {
+     await anotar('#diagnostico h2.sec-title', null);
+     const sr = shadow(); const ta = sr && sr.querySelector('textarea');
+     if (ta) { ta.value = 'o título não diz o efeito. Trocar por um que diga o que a seção prova.'; ta.dispatchEvent(new Event('input',{bubbles:true})); }
+   } else {
+     await anotar('#diagnostico h2.sec-title', 'o título não diz o efeito. Trocar por um que diga o que a seção prova.');
+     await anotar('#diagnostico .nums .card:nth-child(3) .v', 'manchete tem que ser a taxa, e o denominador não aparece em lugar nenhum.');
+     await anotar('#fontes .btn', 'o botão promete exportar e não existe consolidado nenhum ainda.');
+   }
+   document.title = 'pronto';
+ })();
+</script>
+</body></html>
