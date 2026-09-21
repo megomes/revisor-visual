@@ -81,15 +81,14 @@ jobs:
 
       - name: Montar a nota do Release
         env:
-          CWS_EXTENSION_ID: ${{ vars.CWS_EXTENSION_ID }}
+          CWS_URL: ${{ vars.CWS_URL }}
         run: |
           python3 - <<'PY'
           import os, glob, pathlib
           ver = "${{ steps.ver.outputs.v }}"
           xpi = sorted(glob.glob("dist/*.xpi"))
           xpi = os.path.basename(xpi[0]) if xpi else "(nao gerado nesta versao)"
-          eid = os.environ.get("CWS_EXTENSION_ID", "").strip()
-          cws = "https://chromewebstore.google.com/detail/%s" % eid if eid else ""
+          cws = os.environ.get("CWS_URL", "").strip()
           src = ".github/release-chrome-loja.md" if cws else ".github/release-chrome-manual.md"
           chrome = pathlib.Path(src).read_text(encoding="utf-8").replace("__CWS_URL__", cws)
           notes = pathlib.Path(".github/release-notes.md").read_text(encoding="utf-8")
@@ -107,20 +106,3 @@ jobs:
             --title "Revisor Visual ${{ steps.ver.outputs.v }}" \
             --notes-file notes.md \
             dist/*.zip $(ls dist/*.xpi 2>/dev/null)
-
-      - name: Publicar na Chrome Web Store
-        if: github.ref_type == 'tag'
-        env:
-          CLIENT_ID: ${{ secrets.CWS_CLIENT_ID }}
-          CLIENT_SECRET: ${{ secrets.CWS_CLIENT_SECRET }}
-          REFRESH_TOKEN: ${{ secrets.CWS_REFRESH_TOKEN }}
-          PUBLISHER_ID: ${{ vars.CWS_PUBLISHER_ID }}
-          EXTENSION_ID: ${{ vars.CWS_EXTENSION_ID }}
-        run: |
-          if [ -z "$CLIENT_ID" ] || [ -z "$EXTENSION_ID" ]; then
-            echo "::warning::Sem credenciais da Chrome Web Store. O zip fica so no Release."
-            exit 0
-          fi
-          npx --yes chrome-webstore-upload-cli@latest \
-            --source "dist/revisor-visual-chrome-${{ steps.ver.outputs.v }}.zip" \
-            --extension-id "$EXTENSION_ID"
