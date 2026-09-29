@@ -28,7 +28,8 @@
     minimized: false,
     sessionId: null,    /* a sessão que vai para o histórico, até o próximo Limpar */
     sessionStart: null,
-    sends: []           /* cada cópia: quando, quais itens e se foi tudo ou só a página */
+    sends: [],          /* cada cópia: quando, quais itens e se foi tudo ou só a página */
+    vista: 'lista'      /* o que o painel mostra: os comentários ou o histórico */
   };
   let S = Object.assign({}, DEFAULTS);
   let writingOurselves = false;
@@ -539,6 +540,51 @@
   .fantes img { display: block; max-width: 100%; max-height: 200px; border-radius: 6px;
                 border: 1px solid #2c323a; }
   .layer.fotografando .aviso { display: none; }
+
+  .painel.modo-hist { width: 410px; }
+  .painel.modo-hist .opcoes, .painel.modo-hist .pe { display: none; }
+  .hbarra { display: flex; align-items: center; justify-content: space-between; gap: 8px;
+            padding: 3px 6px 9px; font-size: 11.5px; color: #a9b1bf; }
+  .hbarra label { display: flex; align-items: center; gap: 5px; cursor: pointer; }
+  .hbarra button { background: none; border: 1px solid #3a4049; color: #c3c9d4; border-radius: 5px;
+                   font-size: 11px; padding: 3px 7px; cursor: pointer; }
+  .hbarra button:hover { border-color: ${ACCENT}; color: ${ACCENT}; }
+  .hs { display: flex; align-items: center; gap: 7px; padding: 9px 6px; border-top: 1px solid #2c323a;
+        cursor: pointer; font-size: 12px; user-select: none; }
+  .hs:hover { background: #1e222a; }
+  .hs .seta { font-size: 9px; color: #8b93a1; transition: transform .15s; }
+  .hs.aberta .seta { transform: rotate(90deg); }
+  .hs .hq { font-weight: 600; white-space: nowrap; }
+  .hs .tag { font-size: 10.5px; color: #a9b1bf; border: 1px solid #3a4049; border-radius: 99px;
+             padding: 0 6px; white-space: nowrap; }
+  .hs .mini { flex: 1; min-width: 40px; height: 5px; background: #262b33; border-radius: 99px;
+              overflow: hidden; display: flex; }
+  .hs .mini i { display: block; height: 100%; }
+  .hs .mini .o { background: #22c55e; }
+  .hs .mini .x { background: #ef4444; }
+  .hs .hn { font: 600 11px/1 ui-monospace, Menlo, monospace; color: #8b93a1; white-space: nowrap; }
+  .hit { display: flex; gap: 8px; align-items: flex-start; padding: 7px 6px 7px 4px; border-radius: 7px;
+         cursor: pointer; border-left: 3px solid transparent; }
+  .hit:hover { background: #1e222a; }
+  .hit.ok { border-left-color: #22c55e; }
+  .hit.nao { border-left-color: #ef4444; }
+  .hit.ok .cm { color: #8b93a1; }
+  .hit.fora { opacity: .72; }
+  .hit .num { flex: none; min-width: 20px; height: 20px; padding: 0 4px; border-radius: 10px;
+              background: ${ACCENT}; color: #1a1208; font: 700 11px/20px ui-sans-serif, sans-serif; text-align: center; }
+  .hit .th { flex: none; width: 66px; height: 46px; object-fit: cover; border-radius: 4px;
+             border: 1px solid #2c323a; background: #0b0d10; }
+  .hit .txt { flex: 1; min-width: 0; }
+  .hit .cm { font-size: 12px; line-height: 1.4; color: #e7e9ee; display: -webkit-box; -webkit-line-clamp: 3;
+             -webkit-box-orient: vertical; overflow: hidden; }
+  .hit .alvo2 { font: 10.5px/1.4 ui-monospace, Menlo, monospace; color: #8b93a1; margin-top: 2px;
+                white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .hit .bts { flex: none; display: flex; flex-direction: column; gap: 3px; }
+  .hit .bts button { width: 26px; height: 22px; border-radius: 5px; border: 1px solid #3a4049; background: #1b1e25;
+                     color: #8b93a1; cursor: pointer; font-size: 12px; line-height: 1; padding: 0; }
+  .hit .bts button:hover { color: #e7e9ee; }
+  .hit .bts .sim.on { background: rgba(34,197,94,.15); border-color: #22c55e; color: #86efac; }
+  .hit .bts .nao.on { background: rgba(239,68,68,.15); border-color: #ef4444; color: #fca5a5; }
   button.b.ruim { background: #7f1d1d; border-color: #b91c1c; color: #fee2e2; }
   .aviso { position: fixed; left: 50%; transform: translateX(-50%); top: 14px; background: #15171c;
            color: #e7e9ee; border: 1px solid ${ACCENT}; border-radius: 8px; padding: 8px 14px;
@@ -808,8 +854,15 @@
     archive('copiado');
   }
 
+  /* o histórico abre dentro do painel, em cima da página, para você não sair
+     de onde está. Com o modo desligado não há painel, e aí abre a página inteira */
   function abreHistorico() {
-    if (hasExt) ask({ type: 'rv-open-history' });
+    if (!hasExt) return;
+    if (!live()) { ask({ type: 'rv-open-history' }); return; }
+    S.vista = 'hist';
+    S.minimized = false;
+    saveState();
+    paintChrome();
   }
 
   /* pede ao fundo a foto do item. O contorno fica em volta do elemento até a
@@ -961,7 +1014,11 @@
       });
       if (st === undefined) { vai(); return; }
       pintaSt(st);
-      ask({ type: 'rv-review', id: it.id, st }).then(vai);
+      if (histCache) histCache.confs[it.id] = st;
+      ask({ type: 'rv-review', id: it.id, st }).then(() => {
+        if (panelEl && S.vista === 'hist') renderHistorico();
+        vai();
+      });
     };
     bOk.addEventListener('click', () => segue('ok'));
     bNao.addEventListener('click', () => segue('nao'));
@@ -1089,6 +1146,7 @@
   function renderPanel() {
     if (!panelEl) return;
     resolveAll();
+    if (S.vista === 'hist' && hasExt) { renderHistorico(); paintBadges(); return; }
     const url = pageUrl();
     const lista = panelEl.querySelector('.lista');
     const cont = panelEl.querySelector('.n');
@@ -1149,6 +1207,186 @@
       }
     }
     paintBadges();
+    encaixaPainel();
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* histórico no painel                                                 */
+  /* ------------------------------------------------------------------ */
+
+  let histCache = null;          /* a última lista que veio do fundo */
+  const fotoCache = new Map();   /* id do item -> dataURL, ou null quando não há foto */
+  const histAbertas = new Set();
+  let histIniciado = false;
+  let histToken = 0;
+  let soPendentes = true;
+
+  /* as sessões guardadas, mais a que está no painel agora, que é a mais nova.
+     Primeiro as sessões com item desta página */
+  function sessoesDoHistorico() {
+    const sess = ((histCache && histCache.sessoes) || []).slice();
+    if (S.items.length) {
+      if (!S.sessionId) { ensureSession(); saveState(); }
+      const i = sess.findIndex((x) => x.id === S.sessionId);
+      const velha = i >= 0 ? sess[i] : null;
+      const agora = new Set(S.items.map((x) => x.id));
+      const enviados = new Set((S.sends || []).flatMap((e) => e.ids));
+      const ficam = velha ? velha.items.filter((x) => !agora.has(x.id) && enviados.has(x.id)) : [];
+      if (i >= 0) sess.splice(i, 1);
+      sess.push({ id: S.sessionId, start: S.sessionStart, end: new Date().toISOString(),
+        motivo: 'aberta', aberta: true, items: ficam.concat(S.items) });
+    }
+    const url = pageUrl();
+    const daqui = (x) => x.items.some((it) => sameUrl(it.url, url));
+    return sess.sort((a, b) => (b.aberta ? 1 : 0) - (a.aberta ? 1 : 0) ||
+      (daqui(b) ? 1 : 0) - (daqui(a) ? 1 : 0) || String(b.end).localeCompare(String(a.end)));
+  }
+
+  function renderHistorico() {
+    const lista = panelEl.querySelector('.lista');
+    const token = ++histToken;
+    if (histCache) desenhaHistorico(lista);
+    else lista.innerHTML = '<div class="vazio">Carregando o histórico...</div>';
+    ask({ type: 'rv-hist-list' }).then((r) => {
+      if (!r || token !== histToken || !panelEl || S.vista !== 'hist') return;
+      histCache = r;
+      desenhaHistorico(panelEl.querySelector('.lista'));
+    });
+  }
+
+  const MOTIVO = { aberta: 'no painel agora', copiado: 'copiada', limpo: 'limpa',
+    desligado: 'ao desligar', importado: 'importada', conferida: 'conferida' };
+
+  function desenhaHistorico(lista) {
+    const confs = histCache.confs || {};
+    const fotos = new Set(histCache.fotos || []);
+    const sessoes = sessoesDoHistorico();
+    const url = pageUrl();
+    const rolagem = lista.scrollTop;
+    lista.innerHTML = '';
+    panelEl.querySelector('.n').textContent = sessoes.length + (sessoes.length === 1 ? ' sessão' : ' sessões');
+
+    const barra = document.createElement('div');
+    barra.className = 'hbarra';
+    barra.innerHTML = '<label><input type="checkbox"> só o que falta conferir</label>' +
+      '<button class="inteira" title="Abre o histórico numa aba própria, com as fotos grandes">Página inteira</button>';
+    const cb = barra.querySelector('input');
+    cb.checked = soPendentes;
+    cb.addEventListener('change', () => { soPendentes = cb.checked; desenhaHistorico(lista); });
+    barra.querySelector('.inteira').addEventListener('click', () => ask({ type: 'rv-open-history' }));
+    lista.appendChild(barra);
+
+    if (!sessoes.length) {
+      const v = document.createElement('div');
+      v.className = 'vazio';
+      v.textContent = 'Nenhuma sessão ainda. A sessão entra aqui quando você copia, limpa ou desliga o modo.';
+      lista.appendChild(v);
+      encaixaPainel();
+      return;
+    }
+    if (!histIniciado) {
+      histIniciado = true;
+      histAbertas.add(sessoes[0].id);
+    }
+
+    let mostrou = 0;
+    for (const sess of sessoes) {
+      const itens = sess.items.filter((i) => !soPendentes || !confs[i.id]);
+      let ok = 0, nao = 0;
+      for (const i of sess.items) { if (confs[i.id] === 'ok') ok++; else if (confs[i.id] === 'nao') nao++; }
+      const total = sess.items.length;
+      if (soPendentes && !itens.length) continue;
+      mostrou++;
+      const aberta = histAbertas.has(sess.id);
+
+      const cab = document.createElement('div');
+      cab.className = 'hs' + (aberta ? ' aberta' : '');
+      cab.innerHTML = '<span class="seta">▶</span><span class="hq"></span><span class="tag"></span>' +
+        '<span class="mini"><i class="o"></i><i class="x"></i></span><span class="hn"></span>';
+      cab.querySelector('.hq').textContent = dataCurta(sess.end || sess.start);
+      cab.querySelector('.tag').textContent = MOTIVO[sess.motivo] || sess.motivo;
+      cab.querySelector('.o').style.width = (100 * ok / total) + '%';
+      cab.querySelector('.x').style.width = (100 * nao / total) + '%';
+      cab.querySelector('.hn').textContent = (ok + nao) + ' de ' + total;
+      cab.title = ok + ' ficaram, ' + nao + ' não ficaram, ' + (total - ok - nao) + ' sem conferir';
+      cab.addEventListener('click', () => {
+        if (histAbertas.has(sess.id)) histAbertas.delete(sess.id); else histAbertas.add(sess.id);
+        desenhaHistorico(lista);
+      });
+      lista.appendChild(cab);
+      if (!aberta) continue;
+
+      for (const it of itens) {
+        const st = confs[it.id] || null;
+        const aqui = sameUrl(it.url, url);
+        const row = document.createElement('div');
+        row.className = 'hit' + (st ? ' ' + st : '') + (aqui ? '' : ' fora');
+        const num = document.createElement('div'); num.className = 'num'; num.textContent = it.n;
+        row.appendChild(num);
+        if (fotos.has(it.id)) {
+          const th = document.createElement('img');
+          th.className = 'th';
+          th.alt = '';
+          const poe = (src) => { if (src) th.src = src; else th.remove(); };
+          th.onerror = () => th.remove();
+          if (fotoCache.has(it.id)) poe(fotoCache.get(it.id));
+          else ask({ type: 'rv-shot-get', id: it.id }).then((src) => { fotoCache.set(it.id, src); poe(src); });
+          row.appendChild(th);
+        }
+        const txt = document.createElement('div'); txt.className = 'txt';
+        const cm = document.createElement('div'); cm.className = 'cm'; cm.textContent = it.comment;
+        const a2 = document.createElement('div'); a2.className = 'alvo2';
+        a2.textContent = (aqui ? '' : it.pageTitle + ' · ') + it.kind + (it.anchor ? ' "' + cut(it.anchor, 40) + '"' : '');
+        txt.append(cm, a2);
+        const bts = document.createElement('div'); bts.className = 'bts';
+        const bOk = document.createElement('button'); bOk.className = 'sim' + (st === 'ok' ? ' on' : ''); bOk.textContent = '✓';
+        bOk.title = st === 'ok' ? 'Voltar para sem conferir' : 'Ficou';
+        const bNao = document.createElement('button'); bNao.className = 'nao' + (st === 'nao' ? ' on' : ''); bNao.textContent = '✗';
+        bNao.title = st === 'nao' ? 'Voltar para sem conferir' : 'Não ficou';
+        const marca = (v) => (e) => {
+          e.stopPropagation();
+          const novo = st === v ? null : v;
+          if (novo) confs[it.id] = novo; else delete confs[it.id];
+          if (sess.aberta) archive('conferida');
+          ask({ type: 'rv-review', id: it.id, st: novo });
+          desenhaHistorico(lista);
+        };
+        bOk.addEventListener('click', marca('ok'));
+        bNao.addEventListener('click', marca('nao'));
+        bts.append(bOk, bNao);
+        row.append(txt, bts);
+        row.title = aqui ? 'Mostrar na página' : 'Abrir a página "' + it.pageTitle + '" nesta aba';
+        row.addEventListener('click', () => confere(sess, it, st, fotos.has(it.id)));
+        lista.appendChild(row);
+      }
+    }
+    if (!mostrou) {
+      const v = document.createElement('div');
+      v.className = 'vazio';
+      v.textContent = 'Tudo conferido. Desmarque "só o que falta conferir" para ver o que já passou.';
+      lista.appendChild(v);
+    }
+    lista.scrollTop = rolagem;
+    encaixaPainel();
+  }
+
+  /* o painel cresce quando a lista cresce: se passar da borda de baixo, sobe */
+  function encaixaPainel() {
+    if (!panelEl) return;
+    const r = panelEl.getBoundingClientRect();
+    if (r.bottom > innerHeight - 8) panelEl.style.top = Math.max(8, innerHeight - 8 - r.height) + 'px';
+  }
+
+  /* item desta página: destaca aqui mesmo, sem navegar. Item de outra página:
+     leva esta aba até lá, e o cartão aparece quando ela carregar */
+  function confere(sess, it, st, temFoto) {
+    if (sess.aberta) archive('conferida');
+    if (sameUrl(it.url, pageUrl())) {
+      showFocus({ item: it, sessionId: sess.id, sessionEnd: sess.end, st, temFoto,
+        pos: sess.items.findIndex((x) => x.id === it.id) + 1, total: sess.items.length });
+    } else {
+      ask({ type: 'rv-goto', sessionId: sess.id, itemId: it.id, aqui: true });
+    }
   }
 
   function modName() {
@@ -1161,7 +1399,7 @@
     panelEl.innerHTML =
       '<div class="cab"><span class="pt"></span><h1>Revisor Visual</h1>' +
       '<span class="n">0 itens</span>' +
-      (hasExt ? '<button class="hist" title="Abre o histórico das sessões, para conferir item a item">Histórico</button>' : '') +
+      (hasExt ? '<button class="hist"></button>' : '') +
       '<button class="min" title="Minimizar">⌄</button>' +
       '<button class="off" title="Desligar o modo de revisão">×</button></div>' +
       '<div class="opcoes">' +
@@ -1176,8 +1414,9 @@
       '<button class="b limpa" title="Guarda a sessão no histórico e começa outra, vazia">Limpar</button></div>';
     layer.appendChild(panelEl);
 
+    const largura = S.vista === 'hist' && hasExt ? 410 : 350;
     const pos = S.panelPos || { left: innerWidth - 366, top: innerHeight - 520 };
-    panelEl.style.left = Math.max(8, Math.min(pos.left, innerWidth - 360)) + 'px';
+    panelEl.style.left = Math.max(8, Math.min(pos.left, innerWidth - largura - 10)) + 'px';
     panelEl.style.top = Math.max(8, Math.min(pos.top, innerHeight - 120)) + 'px';
 
     const sticky = panelEl.querySelector('.sticky');
@@ -1210,7 +1449,16 @@
       if (guardou) flash('Sessão guardada no histórico. O painel começa vazio.', 2400);
     });
     const hist = panelEl.querySelector('.hist');
-    if (hist) hist.addEventListener('click', abreHistorico);
+    if (hist) {
+      const noHist = S.vista === 'hist';
+      hist.textContent = noHist ? 'Comentários' : 'Histórico';
+      hist.title = noHist ? 'Volta para os comentários desta sessão' : 'Mostra as sessões anteriores, para conferir item a item';
+      hist.addEventListener('click', () => {
+        if (S.vista === 'hist') { S.vista = 'lista'; saveState(); paintChrome(); }
+        else abreHistorico();
+      });
+      if (noHist) panelEl.classList.add('modo-hist');
+    }
     panelEl.querySelector('.off').addEventListener('click', () => setActive(false));
     panelEl.querySelector('.min').addEventListener('click', () => { S.minimized = true; saveState(); paintChrome(); });
 

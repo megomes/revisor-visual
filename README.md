@@ -42,7 +42,7 @@ Para mexer no código, publicar versão nova ou entender os arquivos, veja o
 | Clique no número laranja na página | Reabre o comentário para editar |
 | **Esc** com o modo ligado | Desliga o modo |
 | **Limpar**, duas vezes | Guarda a sessão no histórico e esvazia o painel |
-| **Histórico**, no topo do painel | Abre a lista das sessões, para conferir item a item |
+| **Histórico**, no topo do painel | Troca a lista do painel pelas sessões anteriores, para conferir item a item |
 
 O painel tem uma opção **clique simples anota**, para quando você estiver numa
 passada longa e não precisar navegar pela página. O modificador também é
@@ -65,18 +65,20 @@ quando desliga o modo. A sessão que ainda está no painel também aparece no
 histórico, marcada como aberta. A foto é recortada da aba no momento em que você
 salva o item, com o contorno laranja em volta do elemento.
 
-A página do histórico abre pelo botão **Histórico**, no topo do painel. Cada
-sessão é um bloco, com uma barra de quantos itens ficaram, quantos não ficaram e
-quantos faltam conferir. Em cada item, **Ficou** e **Não ficou** registram a
-conferência, e **Ir até lá** abre a página do item.
+O botão **Histórico**, no topo do painel, mostra as sessões no próprio painel,
+em cima da página, sem trocar de aba. Cada sessão tem uma barra de quantos itens
+já foram conferidos, e cada item tem **✓** para ficou e **✗** para não ficou.
+Clicar num item desta página rola até ele. Clicar num item de outra página leva
+esta aba até lá.
 
-Na página do item, o elemento aparece destacado, e um cartão no canto inferior
-esquerdo mostra o pedido e a foto de antes. **Ficou** e **Não ficou** registram e
+O elemento aparece destacado, e um cartão no canto inferior esquerdo mostra o
+pedido e a foto de antes. **Ficou** e **Não ficou** registram e
 já levam ao próximo item sem conferência. Se o elemento sumiu da página, o cartão
 avisa. Se no mesmo lugar agora há outro texto, o cartão mostra o texto novo.
 
-**Copiar os que não ficaram** monta de novo o texto para o Claude, só com os itens
-marcados como **Não ficou**. **Importar export** lê o texto que você já colou no
+**Página inteira**, no painel do histórico, abre o histórico numa aba própria,
+com as fotos grandes. Ali, **Copiar os que não ficaram** monta de novo o texto
+para o Claude, só com os itens marcados como **Não ficou**. **Importar export** lê o texto que você já colou no
 Claude antes, de uma cópia ou de várias em sequência, e cria uma sessão por cópia,
 sem foto. Importar a mesma cópia duas vezes não duplica nada.
 

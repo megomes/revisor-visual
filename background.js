@@ -207,6 +207,47 @@ async function marca(id, st) {
   avisaHistorico();
 }
 
+/* rodadas antigas: quem carrega a extensão desta pasta pode deixar ao lado do
+   manifesto um historico-importar.md com exports colados em sequência. Cada
+   rodada entra uma vez só, e apagar a sessão depois não a faz voltar */
+let sementeFeita = null;
+function importaSemente() {
+  if (sementeFeita) return sementeFeita;
+  sementeFeita = (async () => {
+    let txt = null;
+    try {
+      const r = await fetch(api.runtime.getURL('historico-importar.md'));
+      if (r.ok) txt = await r.text();
+    } catch (_) { /* o arquivo não existe, que é o normal */ }
+    if (!txt) return;
+    const o = await api.storage.local.get('rv_seed_done');
+    const feitas = new Set((o && o.rv_seed_done) || []);
+    let novas = 0;
+    for (const sess of globalThis.RVShared.parseExport(txt)) {
+      if (feitas.has(sess.id)) continue;
+      if (!(await RVDB.get('sessoes', sess.id))) await RVDB.put('sessoes', sess);
+      feitas.add(sess.id);
+      novas++;
+    }
+    if (novas) {
+      await api.storage.local.set({ rv_seed_done: Array.from(feitas) });
+      avisaHistorico();
+    }
+  })().catch((e) => console.warn('Revisor Visual:', e && e.message));
+  return sementeFeita;
+}
+importaSemente();
+
+/* o histórico inteiro para o painel da página: sessões, conferência e quais
+   itens têm foto. As fotos vão uma a uma, por rv-shot-get */
+async function listaHistorico() {
+  await importaSemente();
+  const [sessoes, confs, fotos] = await Promise.all([RVDB.all('sessoes'), RVDB.all('conferencia'), RVDB.keys('fotos')]);
+  const st = {};
+  for (const c of confs) st[c.id] = c.st;
+  return { sessoes, confs: st, fotos };
+}
+
 async function abreHistorico() {
   const url = api.runtime.getURL('history.html');
   const abas = await api.tabs.query({});
@@ -241,7 +282,13 @@ api.runtime.onMessage.addListener((msg, sender, send) => {
   if (msg.type === 'rv-count') { paintBadge(msg.n | 0); return false; }
 
   /* mensagens que chegam também da página do histórico, que não é aba revisada */
-  if (msg.type === 'rv-goto') return responde(levaAoItem(msg.sessionId, msg.itemId, null), send);
+  /* da página do histórico, procura ou abre a aba do item; do painel na
+     página, com aqui, usa a própria aba */
+  if (msg.type === 'rv-goto') {
+    return responde(levaAoItem(msg.sessionId, msg.itemId, msg.aqui && sender.tab ? sender.tab : null), send);
+  }
+  if (msg.type === 'rv-hist-list') return responde(listaHistorico(), send);
+  if (msg.type === 'rv-seed') return responde(importaSemente().then(() => true), send);
   if (msg.type === 'rv-review') return responde(marca(msg.id, msg.st).then(() => true), send);
   if (msg.type === 'rv-open-history') return responde(abreHistorico().then(() => true), send);
   if (msg.type === 'rv-shot-get') {

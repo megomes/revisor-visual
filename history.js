@@ -110,7 +110,7 @@
 
   const MOTIVO = {
     aberta: 'aberta no painel', copiado: 'guardada ao copiar', limpo: 'guardada ao limpar',
-    desligado: 'guardada ao desligar', importado: 'importada'
+    desligado: 'guardada ao desligar', importado: 'importada', conferida: 'conferida na página'
   };
 
   function passa(st) {
@@ -334,5 +334,6 @@
   api.storage.onChanged.addListener((ch, area) => { if (area === 'local' && ch.rv_state) agenda(); });
   document.addEventListener('visibilitychange', () => { if (!document.hidden) agenda(); });
 
-  desenha();
+  /* o fundo importa as rodadas do historico-importar.md antes do primeiro desenho */
+  ask({ type: 'rv-seed' }).then(desenha);
 })();

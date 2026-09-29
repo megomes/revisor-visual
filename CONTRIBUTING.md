@@ -32,7 +32,7 @@ separado para ligar.
 ## Publicar uma versão
 
 ```bash
-git tag v1.1.0 && git push origin v1.1.0
+git tag v1.1.1 && git push origin v1.1.1
 ```
 
 O `.github/workflows/release.yml` grava a versão nos dois manifests, monta o
@@ -57,7 +57,8 @@ assina nada.
 | `content.js` | Tudo o que acontece na página: seleção, âncora, caminho, painel, cartão de conferência |
 | `shared.js` | Monta o texto do export, lê esse texto de volta na importação e compara endereços, igual para a página, o fundo e o histórico |
 | `db.js` | O IndexedDB da extensão, com as sessões guardadas, as fotos e a conferência de cada item |
-| `history.html`, `history.js` | A página do histórico |
+| `history.html`, `history.js` | A página do histórico, aberta por **Página inteira** |
+| `historico-importar.md` | Opcional e fora do git: exports antigos colados em sequência. A extensão carregada desta pasta importa cada rodada uma vez |
 | `icons/` | Ícones gerados, nos tamanhos 16, 32, 48 e 128 |
 | `.github/workflows/release.yml` | Monta os pacotes, assina o `.xpi` e publica o Release a cada tag |
 | `.github/release-notes.md` | Esqueleto da nota do Release |

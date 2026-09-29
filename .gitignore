@@ -6,3 +6,6 @@ dist/
 
 .env
 .env.*
+
+# rodadas antigas para o histórico, lidas uma vez pela extensão carregada desta pasta
+historico-importar.md
