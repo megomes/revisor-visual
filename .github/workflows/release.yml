@@ -40,14 +40,14 @@ jobs:
       - name: Montar pacote do Chrome
         run: |
           mkdir -p dist/chrome
-          cp -r icons background.js content.js dist/chrome/
+          cp -r icons background.js content.js shared.js db.js history.html history.js dist/chrome/
           cp manifest.json dist/chrome/manifest.json
           (cd dist/chrome && zip -qr ../revisor-visual-chrome-${{ steps.ver.outputs.v }}.zip .)
 
       - name: Montar pasta do Firefox
         run: |
           mkdir -p dist/firefox
-          cp -r icons background.js content.js dist/firefox/
+          cp -r icons background.js content.js shared.js db.js history.html history.js dist/firefox/
           cp manifest.firefox.json dist/firefox/manifest.json
 
       - name: Assinar o .xpi no AMO (unlisted)

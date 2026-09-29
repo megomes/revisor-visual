@@ -14,8 +14,8 @@ Claude. Os marcadores laranjas ficam na página e o painel lista os comentários
 
 ![Página borrada com dois marcadores laranjas, e o painel da extensão listando os dois comentários](docs/painel.png)
 
-Funciona em arquivo local (`file://`), em `localhost` e em qualquer site. Serve
-para HTML estático e para página gerada por React.
+Funciona em arquivo local (`file://`), em `localhost`, em qualquer site e em
+Artefato do Claude. Serve para HTML estático e para página gerada por React.
 
 ## Instalar
 
@@ -41,6 +41,8 @@ Para mexer no código, publicar versão nova ou entender os arquivos, veja o
 | **Enter** na caixa | Salva. `Shift+Enter` quebra linha, `Esc` cancela |
 | Clique no número laranja na página | Reabre o comentário para editar |
 | **Esc** com o modo ligado | Desliga o modo |
+| **Limpar**, duas vezes | Guarda a sessão no histórico e esvazia o painel |
+| **Histórico**, no topo do painel | Abre a lista das sessões, para conferir item a item |
 
 O painel tem uma opção **clique simples anota**, para quando você estiver numa
 passada longa e não precisar navegar pela página. O modificador também é
@@ -51,6 +53,35 @@ arquivo. A sessão é uma só, a numeração é corrida, e o painel mostra os it
 desta página em cima e os das outras embaixo. Depois que o Claude reescreve o
 arquivo e você recarrega, o marcador de um comentário cujo elemento não existe
 mais fica cinza, e o item continua na lista.
+
+## Histórico e conferência
+
+O histórico guarda cada sessão com uma foto de cada item, para você conferir
+depois, item a item, se o Claude aplicou o pedido. Uma sessão é o que está no
+painel entre um **Limpar** e o próximo.
+
+A sessão vai para o histórico em três momentos: quando você copia, quando limpa e
+quando desliga o modo. A sessão que ainda está no painel também aparece no
+histórico, marcada como aberta. A foto é recortada da aba no momento em que você
+salva o item, com o contorno laranja em volta do elemento.
+
+A página do histórico abre pelo botão **Histórico**, no topo do painel. Cada
+sessão é um bloco, com uma barra de quantos itens ficaram, quantos não ficaram e
+quantos faltam conferir. Em cada item, **Ficou** e **Não ficou** registram a
+conferência, e **Ir até lá** abre a página do item.
+
+Na página do item, o elemento aparece destacado, e um cartão no canto inferior
+esquerdo mostra o pedido e a foto de antes. **Ficou** e **Não ficou** registram e
+já levam ao próximo item sem conferência. Se o elemento sumiu da página, o cartão
+avisa. Se no mesmo lugar agora há outro texto, o cartão mostra o texto novo.
+
+**Copiar os que não ficaram** monta de novo o texto para o Claude, só com os itens
+marcados como **Não ficou**. **Importar export** lê o texto que você já colou no
+Claude antes, de uma cópia ou de várias em sequência, e cria uma sessão por cópia,
+sem foto. Importar a mesma cópia duas vezes não duplica nada.
+
+O histórico e as fotos ficam só neste navegador, no armazenamento da extensão, e
+não saem dele.
 
 ## O que sai na área de transferência
 
@@ -90,15 +121,20 @@ O arquivo aparece como caminho absoluto no disco quando a página é `file://`. 
 ## Limites conhecidos
 
 - **Não abre o arquivo nem edita nada.** Ela só descreve. Quem mexe é o Claude.
-- **Não faz captura de tela.** Imagem custa muito token e, na prática, a âncora
-  mais o caminho já bastam.
+- **O texto para o Claude não leva imagem.** Imagem custa muito token e, na
+  prática, a âncora mais o caminho já bastam. A foto de cada item serve só ao
+  histórico.
+- **A foto sai da parte visível da aba.** Elemento maior que a tela sai cortado, e
+  o painel sai junto se estiver por cima do elemento.
 - **Em React de produção não há mapeamento para linha do fonte.** O `_debugSource`
   do React só existe em build de desenvolvimento, e lê-lo exigiria rodar script no
   mesmo mundo de JavaScript da página, o que o Chrome permite e o Firefox ainda
   não.
-- **Não roda dentro de `iframe`.** `all_frames` está desligado de propósito, para
-  não duplicar painel.
+- **Só revisa um frame por aba.** Quando um `iframe` cobre metade da janela ou
+  mais, como no Artefato do Claude, a revisão acontece dentro dele e o resto da
+  página fica de fora. Um `iframe` menor, como um vídeo no meio de um artigo, fica
+  de fora, e a revisão é da página em volta.
 - **Não roda em página interna do navegador** (`chrome://`, `about:`), nem na loja
   de extensões. É restrição do navegador, não da extensão.
 
-Escrito em 2026-09-18, contra Chrome no Manifest V3 e Firefox 115 ou mais novo.
+Atualizado em 2026-09-29, contra Chrome no Manifest V3 e Firefox 115 ou mais novo.

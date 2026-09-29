@@ -54,6 +54,7 @@
  /* estado inicial: modo ligado e clique simples anota, para a demonstração */
  try { localStorage.setItem('rv_state', JSON.stringify({ active:true, sticky:false, modifier:'alt', items:[], nextN:1, panelPos:null, minimized:false })); } catch(e){}
 </script>
+<script src="../shared.js"></script>
 <script src="../content.js"></script>
 <script>
  const shot = new URLSearchParams(location.search).get('shot') || '1';

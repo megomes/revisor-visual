@@ -7,6 +7,12 @@
   if (window.__revisorVisualLoaded) return;
   window.__revisorVisualLoaded = true;
 
+  /* o script roda em todo frame, porque há página cujo conteúdo inteiro mora
+     num iframe de outra origem (o Artefato do Claude). Iframe pequeno é anúncio,
+     botão de rede social ou widget: sai daqui sem ler nada */
+  const isTop = window.top === window;
+  if (!isTop && (innerWidth < 300 || innerHeight < 200)) return;
+
   const api = globalThis.chrome ?? globalThis.browser;
   const hasExt = !!(api && api.storage && api.storage.local && api.runtime && api.runtime.id);
   const KEY = 'rv_state';
@@ -19,10 +25,23 @@
     items: [],
     nextN: 1,
     panelPos: null,
-    minimized: false
+    minimized: false,
+    sessionId: null,    /* a sessão que vai para o histórico, até o próximo Limpar */
+    sessionStart: null,
+    sends: []           /* cada cópia: quando, quais itens e se foi tudo ou só a página */
   };
   let S = Object.assign({}, DEFAULTS);
   let writingOurselves = false;
+
+  /* só um frame por aba desenha painel e aceita clique. O topo começa dono e
+     cede a um iframe que cubra quase toda a janela; o iframe começa quieto e só
+     acorda quando o topo cede. Quem cede é 'hospede', quem espera é 'quieto'. */
+  let role = isTop ? 'dono' : 'quieto';
+  let hostUrl = null;      /* endereço da barra, recebido do topo ao ganhar o painel */
+  let hostTitle = null;
+  let ownerFrame = null;   /* no topo: o frameId do iframe que tem o painel */
+
+  function live() { return S.active && role === 'dono'; }
 
   /* ------------------------------------------------------------------ */
   /* estado                                                              */
@@ -61,10 +80,27 @@
   /* identidade da página                                                */
   /* ------------------------------------------------------------------ */
 
-  function pageUrl() {
+  function ownUrl() {
     const u = location.href;
     const i = u.indexOf('#');
     return i === -1 ? u : u.slice(0, i);
+  }
+
+  /* o iframe que ganhou o painel usa o endereço da barra: o dele próprio é
+     efêmero (o do Artefato leva um token novo a cada carga), e é o da barra que
+     quem vai editar sabe abrir */
+  function pageUrl() {
+    return hostUrl || ownUrl();
+  }
+
+  /* o endereço que o topo entrega ao iframe. No claude.ai a query é a chave de
+     compartilhamento, que não identifica o Artefato e não deve ir para o export */
+  function shareableUrl() {
+    try {
+      const u = new URL(ownUrl());
+      if (/(^|\.)claude\.ai$/.test(u.hostname)) u.search = '';
+      return u.href;
+    } catch (_) { return ownUrl(); }
   }
 
   function filePathOf(url) {
@@ -328,8 +364,8 @@
       id: 'i' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
       n: S.nextN,
       url,
-      filePath: filePathOf(url),
-      pageTitle: document.title || '(sem título)',
+      filePath: filePathOf(ownUrl()),
+      pageTitle: document.title || hostTitle || '(sem título)',
       kind: isSel ? 'trecho de texto' : kindOf(el),
       tagSig: tagSignature(el),
       inside: anchorAncestor(el),
@@ -345,22 +381,41 @@
   }
 
   /* reencontra o elemento de um item nesta página */
+  function elPorCaminho(it) {
+    const path = (it.path || '').split('   /*')[0].trim();
+    if (!path) return null;
+    try { return document.querySelector(path); } catch (_) { return null; }
+  }
+
+  function elPorAncora(it) {
+    if (!it.anchor || it.anchor.length <= 3) return null;
+    const needle = it.anchor.replace(/\.\.\.$/, '');
+    const all = document.body ? document.body.querySelectorAll('*') : [];
+    for (const el of all) {
+      if (el.children.length > 3) continue;
+      if (host && host.contains(el)) continue;
+      if (ownText(el).startsWith(needle)) return el;
+    }
+    return null;
+  }
+
+  /* reencontra o elemento de um item nesta página */
   function resolveItem(it) {
     if (it.url !== pageUrl()) return null;
-    const path = (it.path || '').split('   /*')[0].trim();
-    if (path) {
-      let el = null;
-      try { el = document.querySelector(path); } catch (_) {}
-      if (el) return el;
-    }
-    if (it.anchor && it.anchor.length > 3) {
-      const needle = it.anchor.replace(/\.\.\.$/, '');
-      const all = document.body ? document.body.querySelectorAll('*') : [];
-      for (const el of all) {
-        if (el.children.length > 3) continue;
-        if (ownText(el).startsWith(needle)) return el;
-      }
-    }
+    return elPorCaminho(it) || elPorAncora(it);
+  }
+
+  /* para conferir, o caminho sozinho não basta: numa versão nova da página o
+     mesmo caminho pode cair em outro elemento. Confere a âncora e diz o que achou */
+  function achaParaConferir(it) {
+    const needle = (it.anchor || '').replace(/\.\.\.$/, '');
+    const porCaminho = elPorCaminho(it);
+    const bate = (el) => !needle || needle.length <= 3 ||
+      ownText(el).includes(needle) || anchorOf(el).text.replace(/\.\.\.$/, '').startsWith(needle);
+    if (porCaminho && bate(porCaminho)) return { el: porCaminho, como: 'igual' };
+    const porTexto = elPorAncora(it);
+    if (porTexto) return { el: porTexto, como: 'igual' };
+    if (porCaminho) return { el: porCaminho, como: 'mudou' };
     return null;
   }
 
@@ -368,61 +423,9 @@
   /* export                                                              */
   /* ------------------------------------------------------------------ */
 
-  const PREAMBLE_BASE =
-    'Cada item traz uma âncora, que é o texto como ele aparece na página e, em geral,\n' +
-    'literalmente no arquivo fonte, mais um caminho CSS que confirma o alvo. Ache o\n' +
-    'trecho pela âncora, confirme pelo caminho e aplique o pedido. Não altere nada\n' +
-    'fora do que está listado.';
-  const PREAMBLE_CTX =
-    '\nNa linha Contexto, o que está entre \u00ab \u00bb é exatamente o trecho selecionado.';
-
-  function stamp(d) {
-    const p = (x) => String(x).padStart(2, '0');
-    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) +
-      ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
-  }
-
-  function buildExport(items) {
-    const list = items.filter((i) => (i.comment || '').trim());
-    if (!list.length) return '';
-    const groups = [];
-    const byUrl = new Map();
-    for (const it of list) {
-      if (!byUrl.has(it.url)) { const g = { url: it.url, filePath: it.filePath, title: it.pageTitle, items: [] }; byUrl.set(it.url, g); groups.push(g); }
-      byUrl.get(it.url).items.push(it);
-    }
-    const out = [];
-    const plural = list.length === 1 ? 'item' : 'itens';
-    const pg = groups.length === 1 ? 'página' : 'páginas';
-    out.push('# Revisão visual: ' + list.length + ' ' + plural + ' em ' + groups.length + ' ' + pg);
-    out.push('Gerado em ' + stamp(new Date()) + '.');
-    out.push('');
-    out.push(PREAMBLE_BASE + (list.some((i) => i.context) ? PREAMBLE_CTX : ''));
-    out.push('');
-    groups.forEach((g, gi) => {
-      out.push('## Página ' + (gi + 1) + ': ' + g.title);
-      out.push(g.filePath ? 'Arquivo: ' + g.filePath : 'URL: ' + g.url);
-      out.push('');
-      for (const it of g.items) {
-        let head = '### ' + it.n + ' \u00b7 ' + it.kind + ' ' + it.tagSig;
-        if (it.inside) head += ' em ' + it.inside;
-        out.push(head);
-        if (it.anchor) {
-          out.push('Âncora: "' + it.anchor + '"' +
-            (it.anchorFrom !== 'texto' && it.anchorFrom !== 'seleção' ? '  (vem de ' + it.anchorFrom + ')' : ''));
-        } else {
-          out.push('Âncora: nenhuma, o elemento não tem texto próprio.');
-          if (it.nearby) out.push('Perto de: "' + it.nearby.text + '" (' + it.nearby.como + ')');
-        }
-        if (it.context) out.push('Contexto: ' + it.context);
-        if (it.path) out.push('Caminho: ' + it.path);
-        if (it.occurrences > 1) out.push('Atenção: esse texto aparece ' + it.occurrences + ' vezes na página. Desempate pelo caminho.');
-        out.push('Pedido: ' + it.comment.trim().replace(/\n/g, '\n  '));
-        out.push('');
-      }
-    });
-    return out.join('\n').replace(/\n{3,}/g, '\n\n').trim() + '\n';
-  }
+  /* o texto do export e a comparação de endereço vêm de shared.js, que o
+     manifesto carrega antes deste arquivo */
+  const { buildExport, sameUrl } = globalThis.RVShared;
 
   /* exposto para teste fora da extensão */
   window.__rv = { captureFrom, buildExport, cssPath, anchorOf, kindOf, resolveItem,
@@ -510,6 +513,33 @@
   .pill { position: fixed; pointer-events: auto; background: ${ACCENT}; color: #1a1208;
           border-radius: 20px; padding: 7px 13px; font: 600 12px/1 ui-sans-serif, sans-serif;
           cursor: pointer; box-shadow: 0 8px 26px rgba(0,0,0,.5); user-select: none; }
+  .cab button.hist, .foco .cab .h { font-size: 11px; border: 1px solid #3a4049; border-radius: 5px;
+                                   padding: 3px 7px; color: #c3c9d4; }
+  .cab button.hist:hover, .foco .cab .h:hover { border-color: ${ACCENT}; color: ${ACCENT}; }
+
+  .spot { position: fixed; border: 3px solid ${ACCENT}; border-radius: 6px; pointer-events: none;
+          box-shadow: 0 0 0 4000px rgba(10,12,16,.28); animation: rvpulso 1.4s ease-in-out infinite; }
+  @keyframes rvpulso { 0%, 100% { outline: 0 solid rgba(255,122,69,.55); }
+                       50% { outline: 8px solid rgba(255,122,69,0); } }
+  .foco { position: fixed; left: 16px; bottom: 16px; width: 380px; max-width: calc(100vw - 32px);
+          max-height: 80vh; display: flex; flex-direction: column; background: #15171c; color: #e7e9ee;
+          border: 1px solid ${ACCENT}; border-radius: 12px; pointer-events: auto; font-size: 13px;
+          box-shadow: 0 18px 54px rgba(0,0,0,.65); overflow: hidden; }
+  .foco .cab { cursor: default; }
+  .fcorpo { padding: 10px 12px; overflow-y: auto; }
+  .falvo { font: 600 11px/1.45 ui-monospace, Menlo, monospace; color: #b9c0cc; margin-bottom: 6px;
+           overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .fped { font-size: 14px; line-height: 1.5; white-space: pre-wrap; }
+  .fsit { margin-top: 10px; font-size: 11.5px; line-height: 1.45; color: #8b93a1; }
+  .fsit.aviso2 { color: #fbbf24; }
+  .fsit.mudou { color: #86efac; }
+  .fantes { margin: 10px 0 0; }
+  .fantes figcaption { font-size: 10.5px; color: #8b93a1; text-transform: uppercase; letter-spacing: .06em;
+                       margin-bottom: 5px; }
+  .fantes img { display: block; max-width: 100%; max-height: 200px; border-radius: 6px;
+                border: 1px solid #2c323a; }
+  .layer.fotografando .aviso { display: none; }
+  button.b.ruim { background: #7f1d1d; border-color: #b91c1c; color: #fee2e2; }
   .aviso { position: fixed; left: 50%; transform: translateX(-50%); top: 14px; background: #15171c;
            color: #e7e9ee; border: 1px solid ${ACCENT}; border-radius: 8px; padding: 8px 14px;
            font-size: 12.5px; pointer-events: none; box-shadow: 0 10px 30px rgba(0,0,0,.6); }
@@ -570,7 +600,7 @@
   }
 
   function pickingNow() {
-    return S.active && !boxEl && (S.sticky || modDown);
+    return live() && !boxEl && (S.sticky || modDown);
   }
 
   function applyLevel() {
@@ -580,7 +610,18 @@
     hovered = el;
   }
 
+  let fotografando = null;   /* elemento cujo contorno fica na tela até a foto sair */
+
   function paintHighlight() {
+    paintSpot();
+    if (fotografando) {
+      const r = fotografando.getBoundingClientRect();
+      hiEl.style.display = 'block';
+      hiEl.style.left = r.left + 'px'; hiEl.style.top = r.top + 'px';
+      hiEl.style.width = Math.max(r.width, 2) + 'px'; hiEl.style.height = Math.max(r.height, 2) + 'px';
+      chipEl.style.display = 'none';
+      return;
+    }
     if (!hovered || !pickingNow()) { hiEl.style.display = 'none'; chipEl.style.display = 'none'; return; }
     const r = hovered.getBoundingClientRect();
     hiEl.style.display = 'block';
@@ -609,6 +650,13 @@
 
   function onMove(e) {
     lastMouse = { x: e.clientX, y: e.clientY };
+    /* o modificador também vem do mouse: com o foco do teclado em outro frame
+       (a barra do claude.ai em volta do Artefato), o keydown do Alt não chega */
+    if (live() && !boxEl && modKeyOf(e) !== modDown) {
+      modDown = modKeyOf(e);
+      if (!modDown) level = 0;
+      scheduleLayout();
+    }
     if (!pickingNow()) return;
     const el = document.elementFromPoint(e.clientX, e.clientY);
     if (!el || el === host || host.contains(el)) return;
@@ -694,14 +742,19 @@
       const v = ta.value.trim();
       if (!v) { closeBox(); return; }
       pending.comment = v;
+      const novo = !editingId;
+      const item = pending, alvoEl = pendingEl;
       if (editingId) {
         const i = S.items.findIndex((x) => x.id === editingId);
         if (i >= 0) S.items[i] = pending;
       } else {
+        ensureSession();
         S.items.push(pending);
         S.nextN = pending.n + 1;
       }
       saveState(); closeBox(); renderPanel();
+      /* a foto é do item como ele estava ao ser marcado: a edição não tira outra */
+      if (novo) fotografa(item, alvoEl);
     }
 
     ta.addEventListener('keydown', (e) => {
@@ -716,6 +769,205 @@
 
     refreshAlvo(); place(); paintTargetBox();
     setTimeout(() => { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }, 0);
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* histórico                                                           */
+  /* ------------------------------------------------------------------ */
+
+  function ensureSession() {
+    if (S.sessionId) return;
+    S.sessionId = 's' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    S.sessionStart = (S.items[0] && S.items[0].createdAt) || new Date().toISOString();
+    S.sends = [];
+  }
+
+  /* manda a sessão para o histórico, que mora no fundo da extensão. Devolve
+     false quando não havia nada para guardar */
+  function archive(motivo) {
+    if (!hasExt || !S.items.length) return false;
+    if (!S.sessionId) { ensureSession(); saveState(); }
+    ask({ type: 'rv-archive', sess: JSON.parse(JSON.stringify({
+      id: S.sessionId,
+      start: S.sessionStart,
+      end: new Date().toISOString(),
+      motivo,
+      items: S.items,
+      sends: S.sends || []
+    })) });
+    return true;
+  }
+
+  function registraEnvio(items, escopo) {
+    if (!hasExt) return;
+    const ids = items.filter((i) => (i.comment || '').trim()).map((i) => i.id);
+    if (!ids.length) return;
+    ensureSession();
+    S.sends = (S.sends || []).concat([{ at: new Date().toISOString(), ids, escopo }]);
+    saveState();
+    archive('copiado');
+  }
+
+  function abreHistorico() {
+    if (hasExt) ask({ type: 'rv-open-history' });
+  }
+
+  /* pede ao fundo a foto do item. O contorno fica em volta do elemento até a
+     foto sair, e por isso ela sai com a marca laranja */
+  function fotografa(it, el) {
+    if (!hasExt || !el || !el.isConnected) return;
+    fotografando = el;
+    layer.classList.add('fotografando');
+    scheduleLayout();
+    const solta = () => {
+      if (fotografando !== el) return;
+      fotografando = null;
+      layer.classList.remove('fotografando');
+      scheduleLayout();
+    };
+    const seguranca = setTimeout(solta, 2500);
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      const r = el.getBoundingClientRect();
+      ask({ type: 'rv-shot', id: it.id, rect: { x: r.left, y: r.top, w: r.width, h: r.height },
+        vw: innerWidth, vh: innerHeight })
+        .then(() => { clearTimeout(seguranca); solta(); });
+    }));
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* conferência na página                                               */
+  /* ------------------------------------------------------------------ */
+
+  let focoEl = null;       /* o cartão de conferência */
+  let spotEl = null;       /* o contorno pulsante no elemento conferido */
+  let spotAlvo = null;
+  let focoBusca = null;
+
+  function closeFocus() {
+    if (focoBusca) { clearInterval(focoBusca); focoBusca = null; }
+    if (focoEl) { focoEl.remove(); focoEl = null; }
+    if (spotEl) { spotEl.remove(); spotEl = null; }
+    spotAlvo = null;
+  }
+
+  function paintSpot() {
+    if (!spotEl) return;
+    if (!spotAlvo || !spotAlvo.isConnected) { spotEl.style.display = 'none'; return; }
+    const r = spotAlvo.getBoundingClientRect();
+    spotEl.style.display = 'block';
+    spotEl.style.left = (r.left - 4) + 'px'; spotEl.style.top = (r.top - 4) + 'px';
+    spotEl.style.width = Math.max(r.width, 2) + 8 + 'px'; spotEl.style.height = Math.max(r.height, 2) + 8 + 'px';
+  }
+
+  /* pergunta ao fundo se há um pedido de foco para esta aba e esta página */
+  function takeFocus() {
+    if (!hasExt || role !== 'dono') return;
+    /* o topo com um iframe grande deixa o pedido para o iframe, que é onde o
+       item mora; e só pergunta ao fundo se há pedido guardado */
+    if (isTop && temFilhoGrande()) return;
+    const pergunta = (o) => {
+      if (!o || !o.rv_focus) return;
+      ask({ type: 'rv-focus-take', url: pageUrl() }).then((f) => { if (f && f.item) showFocus(f); });
+    };
+    try {
+      const r = api.storage.local.get('rv_focus', pergunta);
+      if (r && typeof r.then === 'function') r.then(pergunta);
+    } catch (_) {}
+  }
+
+  function dataCurta(iso) {
+    const d = new Date(iso);
+    if (isNaN(d)) return '';
+    const p = (x) => String(x).padStart(2, '0');
+    return p(d.getDate()) + '/' + p(d.getMonth() + 1) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+  }
+
+  function showFocus(f) {
+    ensureReady();
+    closeFocus();
+    const it = f.item;
+    focoEl = document.createElement('div');
+    focoEl.className = 'foco';
+    focoEl.innerHTML =
+      '<div class="cab"><span class="pt"></span><h1>Conferir</h1><span class="n"></span>' +
+      '<button class="h" title="Abrir o histórico">Histórico</button><button class="x" title="Fechar">×</button></div>' +
+      '<div class="fcorpo"><div class="falvo"></div><div class="fped"></div>' +
+      '<div class="fsit">Procurando o ponto na página...</div>' +
+      '<figure class="fantes" hidden><figcaption>Como estava quando você marcou</figcaption><img alt=""></figure></div>' +
+      '<div class="pe"><button class="b ok">Ficou</button><button class="b nao">Não ficou</button>' +
+      '<button class="b pula">Pular</button></div>';
+    layer.appendChild(focoEl);
+    focoEl.querySelector('.n').textContent = 'item ' + it.n + ' · ' + f.pos + ' de ' + f.total +
+      (f.sessionEnd ? ' · ' + dataCurta(f.sessionEnd) : '');
+    focoEl.querySelector('.falvo').textContent = it.kind + ' ' + it.tagSig +
+      (it.anchor ? ' "' + cut(it.anchor, 60) + '"' : '');
+    focoEl.querySelector('.fped').textContent = it.comment;
+    const sit = focoEl.querySelector('.fsit');
+    const bOk = focoEl.querySelector('.ok'), bNao = focoEl.querySelector('.nao');
+    const pintaSt = (st) => {
+      bOk.classList.toggle('pri', st === 'ok');
+      bNao.classList.toggle('ruim', st === 'nao');
+    };
+    pintaSt(f.st);
+
+    if (f.temFoto) {
+      ask({ type: 'rv-shot-get', id: it.id }).then((src) => {
+        if (!src || !focoEl) return;
+        const fig = focoEl.querySelector('.fantes');
+        const img = fig.querySelector('img');
+        img.onload = () => { fig.hidden = false; };
+        img.src = src;
+      });
+    }
+
+    /* página que desenha o conteúdo depois de carregar, como o Artefato, ainda
+       não tem o elemento no primeiro instante: tenta por alguns segundos */
+    let tentativas = 0;
+    const procura = () => {
+      const achado = achaParaConferir(it);
+      if (!achado && ++tentativas < 12) return false;
+      clearInterval(focoBusca); focoBusca = null;
+      if (!focoEl) return true;
+      if (!achado) {
+        sit.textContent = 'Não achei esse ponto nesta versão da página. Se o pedido era tirar, é sinal de que saiu.';
+        sit.className = 'fsit aviso2';
+        return true;
+      }
+      spotAlvo = achado.el;
+      spotEl = document.createElement('div');
+      spotEl.className = 'spot';
+      layer.insertBefore(spotEl, layer.firstChild);
+      if (achado.como === 'mudou') {
+        sit.textContent = 'No lugar marcado agora está outro texto: "' + cut(anchorOf(achado.el).text, 80) + '"';
+        sit.className = 'fsit mudou';
+      } else {
+        sit.textContent = 'O ponto está destacado na página.';
+        sit.className = 'fsit';
+      }
+      achado.el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      scheduleLayout();
+      return true;
+    };
+    if (!procura()) focoBusca = setInterval(procura, 500);
+
+    const segue = (st) => {
+      const vai = () => ask({ type: 'rv-next', sessionId: f.sessionId, afterId: it.id }).then((r) => {
+        if (r && r.done && focoEl) {
+          focoEl.querySelector('.fcorpo').innerHTML = '<div class="fsit">Nada mais para conferir nesta sessão.</div>';
+          focoEl.querySelector('.pe').innerHTML = '<button class="b pri hist2">Abrir o histórico</button>';
+          focoEl.querySelector('.hist2').addEventListener('click', abreHistorico);
+          if (spotEl) { spotEl.remove(); spotEl = null; spotAlvo = null; }
+        }
+      });
+      if (st === undefined) { vai(); return; }
+      pintaSt(st);
+      ask({ type: 'rv-review', id: it.id, st }).then(vai);
+    };
+    bOk.addEventListener('click', () => segue('ok'));
+    bNao.addEventListener('click', () => segue('nao'));
+    focoEl.querySelector('.pula').addEventListener('click', () => segue(undefined));
+    focoEl.querySelector('.x').addEventListener('click', closeFocus);
+    focoEl.querySelector('.h').addEventListener('click', abreHistorico);
   }
 
   /* ------------------------------------------------------------------ */
@@ -740,7 +992,7 @@
   }
 
   function paintBadges() {
-    if (!S.active) { clearBadges(); return; }
+    if (!live()) { clearBadges(); return; }
     const url = pageUrl();
     const mine = S.items.filter((i) => i.url === url);
     /* compara a lista de ids, não só a quantidade: trocar um item por outro
@@ -753,18 +1005,24 @@
         const b = document.createElement('div');
         b.className = 'badge' + (resolved.has(it.id) ? '' : ' perdido');
         b.textContent = it.n;
-        b.title = resolved.has(it.id) ? it.comment : 'Elemento não encontrado nesta versão da página';
         b.dataset.id = it.id;
+        /* o item sai de S na hora do clique, e não do fechamento: salvar a edição
+           troca o objeto em S.items, e o marcador segurava o antigo, que reabria
+           com o comentário de antes */
         b.addEventListener('click', (e) => {
           e.stopPropagation(); e.preventDefault();
-          const el = resolved.get(it.id);
-          if (el) openBox(el, null, JSON.parse(JSON.stringify(it)));
+          const atual = S.items.find((x) => x.id === b.dataset.id);
+          const el = resolved.get(b.dataset.id);
+          if (atual && el) openBox(el, null, JSON.parse(JSON.stringify(atual)));
         });
         badgeWrap.appendChild(b);
       }
     }
+    const porId = new Map(mine.map((i) => [i.id, i]));
     for (const b of badgeWrap.children) {
       const el = resolved.get(b.dataset.id);
+      const it = porId.get(b.dataset.id);
+      b.title = el ? (it ? it.comment : '') : 'Elemento não encontrado nesta versão da página';
       /* o elemento pode sumir ou reaparecer entre uma passada e outra, por
          exemplo depois de o Claude reescrever o arquivo: a classe acompanha */
       b.classList.toggle('perdido', !el);
@@ -819,9 +1077,10 @@
     ta.focus(); ta.select();
   }
 
-  async function doCopy(items, rotulo) {
+  async function doCopy(items, rotulo, escopo) {
     const txt = buildExport(items);
     if (!txt) { flash('Nenhum comentário para exportar.'); return; }
+    registraEnvio(items, escopo);
     const ok = await copyText(txt);
     if (ok) flash(rotulo + ' na área de transferência. Cole no Claude Code.', 2400);
     else showFallbackText(txt);
@@ -901,7 +1160,9 @@
     panelEl.className = 'painel';
     panelEl.innerHTML =
       '<div class="cab"><span class="pt"></span><h1>Revisor Visual</h1>' +
-      '<span class="n">0 itens</span><button class="min" title="Minimizar">⌄</button>' +
+      '<span class="n">0 itens</span>' +
+      (hasExt ? '<button class="hist" title="Abre o histórico das sessões, para conferir item a item">Histórico</button>' : '') +
+      '<button class="min" title="Minimizar">⌄</button>' +
       '<button class="off" title="Desligar o modo de revisão">×</button></div>' +
       '<div class="opcoes">' +
       '<label><input type="checkbox" class="sticky"> clique simples anota</label>' +
@@ -912,7 +1173,7 @@
       '<div class="lista"></div>' +
       '<div class="pe"><button class="b pri tudo">Copiar tudo</button>' +
       '<button class="b pag">Só esta página</button>' +
-      '<button class="b limpa" title="Apagar todos os comentários">Limpar</button></div>';
+      '<button class="b limpa" title="Guarda a sessão no histórico e começa outra, vazia">Limpar</button></div>';
     layer.appendChild(panelEl);
 
     const pos = S.panelPos || { left: innerWidth - 366, top: innerHeight - 520 };
@@ -927,14 +1188,29 @@
     mod.value = S.modifier;
     mod.addEventListener('change', () => { S.modifier = mod.value; saveState(); renderPanel(); });
 
-    panelEl.querySelector('.tudo').addEventListener('click', () => doCopy(S.items, 'Revisão completa'));
+    panelEl.querySelector('.tudo').addEventListener('click', () => doCopy(S.items, 'Revisão completa', 'tudo'));
     panelEl.querySelector('.pag').addEventListener('click', () =>
-      doCopy(S.items.filter((i) => i.url === pageUrl()), 'Revisão desta página'));
-    panelEl.querySelector('.limpa').addEventListener('click', () => {
+      doCopy(S.items.filter((i) => i.url === pageUrl()), 'Revisão desta página', 'pagina'));
+    /* confirma no próprio botão, e não com confirm(): iframe sem allow-modals,
+       como o do Artefato, faz o confirm() voltar false sem mostrar nada */
+    const limpa = panelEl.querySelector('.limpa');
+    let armado = null;
+    limpa.addEventListener('click', () => {
       if (!S.items.length) return;
-      if (!confirm('Apagar os ' + S.items.length + ' comentários da sessão?')) return;
-      S.items = []; S.nextN = 1; saveState(); clearBadges(); renderPanel();
+      if (!armado) {
+        limpa.textContent = 'Apagar ' + S.items.length + '?';
+        armado = setTimeout(() => { armado = null; limpa.textContent = 'Limpar'; }, 3000);
+        return;
+      }
+      clearTimeout(armado); armado = null;
+      const guardou = archive('limpo');
+      S.items = []; S.nextN = 1; S.sessionId = null; S.sessionStart = null; S.sends = [];
+      saveState(); clearBadges(); renderPanel();
+      limpa.textContent = 'Limpar';
+      if (guardou) flash('Sessão guardada no histórico. O painel começa vazio.', 2400);
     });
+    const hist = panelEl.querySelector('.hist');
+    if (hist) hist.addEventListener('click', abreHistorico);
     panelEl.querySelector('.off').addEventListener('click', () => setActive(false));
     panelEl.querySelector('.min').addEventListener('click', () => { S.minimized = true; saveState(); paintChrome(); });
 
@@ -965,7 +1241,7 @@
   function paintChrome() {
     if (panelEl) { panelEl.remove(); panelEl = null; }
     if (pillEl) { pillEl.remove(); pillEl = null; }
-    if (!S.active) { clearBadges(); hiEl.style.display = 'none'; chipEl.style.display = 'none'; return; }
+    if (!live()) { clearBadges(); hiEl.style.display = 'none'; chipEl.style.display = 'none'; return; }
     if (S.minimized) {
       pillEl = document.createElement('div');
       pillEl.className = 'pill';
@@ -989,15 +1265,23 @@
     wire();
   }
 
-  function setActive(on) {
-    ensureReady();   /* desligar também precisa da casca, para limpar a tela */
-    S.active = on;
-    if (!on) { closeBox(); S.minimized = false; }
-    saveState();
-    paintChrome();
-    flash(on ? 'Modo de revisão ligado. ' +
+  function avisoModo() {
+    return S.active ? 'Modo de revisão ligado. ' +
       (S.sticky ? 'Clique em um elemento para comentar.' : 'Segure ' + modName() + ' e clique.')
-      : 'Modo de revisão desligado.');
+      : 'Modo de revisão desligado.';
+  }
+
+  function setActive(on) {
+    if (!on && S.active) archive('desligado');
+    S.active = on;
+    if (!on) S.minimized = false;
+    saveState();
+    /* o painel é de outro frame: ele fica sabendo pelo storage e desenha lá */
+    if (role !== 'dono') return;
+    ensureReady();   /* desligar também precisa da casca, para limpar a tela */
+    if (!on) closeBox();
+    paintChrome();
+    flash(avisoModo());
   }
 
   /* ------------------------------------------------------------------ */
@@ -1005,7 +1289,7 @@
   /* ------------------------------------------------------------------ */
 
   function onClickCapture(e) {
-    if (!S.active) return;
+    if (!live()) return;
     if (host.contains(e.target)) return;
     if (boxEl) return;
     if (!S.sticky && !modKeyOf(e)) return;
@@ -1019,13 +1303,13 @@
   }
 
   function swallow(e) {
-    if (!S.active || boxEl || host.contains(e.target)) return;
+    if (!live() || boxEl || host.contains(e.target)) return;
     if (!S.sticky && !modKeyOf(e)) return;
     e.preventDefault(); e.stopPropagation();
   }
 
   function onKeyDown(e) {
-    if (!S.active) return;
+    if (!live()) return;
     if (modKeyOf(e) && !modDown) { modDown = true; scheduleLayout(); }
     if (boxEl) return;
     if (pickingNow() && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
@@ -1052,31 +1336,121 @@
     window.addEventListener('blur', () => { modDown = false; scheduleLayout(); });
     window.addEventListener('scroll', scheduleLayout, true);
     window.addEventListener('resize', scheduleLayout, true);
-    setInterval(() => { if (S.active && !boxEl) { resolveAll(); paintBadges(); } }, 1500);
+    setInterval(() => { if (live() && !boxEl) { resolveAll(); paintBadges(); } }, 1500);
   }
 
   /* ------------------------------------------------------------------ */
   /* ligação com a extensão                                              */
   /* ------------------------------------------------------------------ */
 
+  /* fração da janela que um iframe precisa cobrir para levar o painel. O
+     Artefato do Claude cobre quase tudo, menos a barra de 40px no topo; um
+     vídeo ou mapa embutido no meio de um artigo fica bem abaixo disso */
+  const COBRE = 0.5;
+
+  function temFilhoGrande() {
+    const area = innerWidth * innerHeight;
+    if (!area) return false;
+    return Array.from(document.querySelectorAll('iframe, frame')).some((f) => {
+      const r = f.getBoundingClientRect();
+      return r.width * r.height >= COBRE * area;
+    });
+  }
+
+  /* runtime.sendMessage nos dois estilos, e null quando ninguém responde */
+  function ask(msg) {
+    return new Promise((resolve) => {
+      let done = false;
+      const cb = (r) => {
+        if (done) return;
+        done = true;
+        void (api.runtime.lastError);
+        resolve(r || null);
+      };
+      try {
+        const p = api.runtime.sendMessage(msg, cb);
+        if (p && typeof p.then === 'function') p.then(cb, () => cb(null));
+      } catch (_) { cb(null); }
+    });
+  }
+
+  /* no topo: um iframe grande pediu o painel. Cede, e avisa o dono anterior
+     se o painel já estava com outro iframe (o Artefato recarregado, por exemplo) */
+  function cede(frameId) {
+    const antes = ownerFrame;
+    ownerFrame = frameId;
+    if (antes != null && antes !== frameId) ask({ type: 'rv-revoke', frameId: antes });
+    if (role !== 'dono') return;
+    role = 'hospede';
+    if (ready) { closeBox(); closeFocus(); paintChrome(); }
+  }
+
+  /* no iframe: pede o painel ao topo. O topo pode ainda não ter carregado o
+     script, então tenta de novo algumas vezes, cada vez esperando mais */
+  function pedePainel(tentativa) {
+    ask({ type: 'rv-claim', w: innerWidth, h: innerHeight }).then((r) => {
+      if (!r || r.retry) {
+        if (tentativa < 8) setTimeout(() => pedePainel(tentativa + 1), 250 * (tentativa + 1));
+        return;
+      }
+      if (!r.own) return;
+      hostUrl = r.hostUrl || null;
+      hostTitle = r.hostTitle || null;
+      role = 'dono';
+      if (S.active) { ensureReady(); paintChrome(); }
+      takeFocus();
+    });
+  }
+
   if (hasExt) {
     try {
       api.runtime.onMessage.addListener((msg, _s, send) => {
-        if (msg && msg.type === 'rv-toggle') { setActive(!S.active); if (send) send({ ok: true }); }
+        if (!msg) return false;
+        if (msg.type === 'rv-toggle') { setActive(!S.active); if (send) send({ ok: true }); }
+        else if (msg.type === 'rv-claim' && isTop) {
+          const cobre = (msg.w | 0) * (msg.h | 0) >= COBRE * innerWidth * innerHeight;
+          if (cobre) cede(msg.frameId);
+          if (send) send(cobre ? { own: true, hostUrl: shareableUrl(), hostTitle: document.title } : { own: false });
+        } else if (msg.type === 'rv-frame-rect' && isTop) {
+          /* o iframe dono quer saber onde está na janela, para recortar a foto:
+             é o iframe cujo tamanho interno bate com o que ele informou */
+          let melhor = null, dif = Infinity;
+          for (const f of document.querySelectorAll('iframe, frame')) {
+            const d = Math.abs(f.clientWidth - (msg.w | 0)) + Math.abs(f.clientHeight - (msg.h | 0));
+            if (d < dif) { dif = d; melhor = f; }
+          }
+          if (send) {
+            if (!melhor) send(null);
+            else {
+              const r = melhor.getBoundingClientRect();
+              send({ x: r.left + melhor.clientLeft, y: r.top + melhor.clientTop, vw: innerWidth });
+            }
+          }
+        } else if (msg.type === 'rv-revoke' && !isTop) {
+          role = 'quieto';
+          if (ready) { closeBox(); closeFocus(); paintChrome(); }
+        }
         return false;
       });
     } catch (_) {}
     try {
       api.storage.onChanged.addListener((ch, area) => {
-        if (area !== 'local' || !ch[KEY] || writingOurselves) return;
+        if (area !== 'local') return;
+        if (ch.rv_focus && ch.rv_focus.newValue) takeFocus();
+        if (!ch[KEY] || writingOurselves) return;
         const nv = ch[KEY].newValue;
         if (!nv) return;
         const eraAtivo = S.active;
         S = Object.assign({}, DEFAULTS, nv);
+        if (role !== 'dono') return;
         if (S.active) ensureReady();
         if (!ready) return;
-        if (S.active !== eraAtivo) paintChrome();
-        else if (S.active) renderPanel();
+        if (S.active !== eraAtivo) {
+          /* o modo mudou em outro frame ou outra aba, e quem avisa é o dono */
+          if (!S.active) closeBox();
+          paintChrome();
+          flash(avisoModo());
+        } else if (S.active) renderPanel();
       });
     } catch (_) {}
   }
@@ -1090,8 +1464,14 @@
 
   loadState().then((st) => {
     S = st;
-    /* a sessão atravessa navegação e reload: se estava ligada, volta ligada */
-    if (S.active) { ensureReady(); paintChrome(); }
-    if (hasExt) { try { api.runtime.sendMessage({ type: 'rv-count', n: S.items.length }); } catch (_) {} }
+    /* a sessão atravessa navegação e reload: se estava ligada, volta ligada.
+       Com um iframe grande na página, o topo espera um pouco antes de desenhar,
+       porque o iframe provavelmente vai pedir o painel, e o painel piscaria */
+    const pinta = () => { if (live()) { ensureReady(); paintChrome(); } takeFocus(); };
+    if (isTop && hasExt && temFilhoGrande()) setTimeout(pinta, 1500);
+    else pinta();
+    if (!hasExt) return;
+    if (isTop) { try { api.runtime.sendMessage({ type: 'rv-count', n: S.items.length }); } catch (_) {} }
+    else if (!temFilhoGrande()) pedePainel(0);
   });
 })();

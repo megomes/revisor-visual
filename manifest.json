@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Revisor Visual",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Marca elementos de uma pagina e exporta os comentarios como prompt pronto para o Claude Code.",
   "permissions": ["storage", "scripting"],
   "host_permissions": ["<all_urls>"],
@@ -25,9 +25,11 @@
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": ["content.js"],
+      "js": ["shared.js", "content.js"],
       "run_at": "document_idle",
-      "all_frames": false
+      "all_frames": true,
+      "match_about_blank": true,
+      "match_origin_as_fallback": true
     }
   ],
   "commands": {

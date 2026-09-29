@@ -32,7 +32,7 @@ separado para ligar.
 ## Publicar uma versão
 
 ```bash
-git tag v1.0.3 && git push origin v1.0.3
+git tag v1.1.0 && git push origin v1.1.0
 ```
 
 O `.github/workflows/release.yml` grava a versão nos dois manifests, monta o
@@ -53,8 +53,11 @@ assina nada.
 | --- | --- |
 | `manifest.json` | Configuração, versão Chrome |
 | `manifest.firefox.json` | A mesma coisa, com o script de fundo no formato do Firefox |
-| `background.js` | Liga e desliga pelo ícone e pelo atalho, e mantém o contador no ícone |
-| `content.js` | Tudo o mais: seleção, âncora, caminho, painel, export |
+| `background.js` | Liga e desliga pelo ícone e pelo atalho, mantém o contador no ícone, combina com o topo qual iframe mostra o painel, e guarda o histórico, as fotos e a conferência |
+| `content.js` | Tudo o que acontece na página: seleção, âncora, caminho, painel, cartão de conferência |
+| `shared.js` | Monta o texto do export, lê esse texto de volta na importação e compara endereços, igual para a página, o fundo e o histórico |
+| `db.js` | O IndexedDB da extensão, com as sessões guardadas, as fotos e a conferência de cada item |
+| `history.html`, `history.js` | A página do histórico |
 | `icons/` | Ícones gerados, nos tamanhos 16, 32, 48 e 128 |
 | `.github/workflows/release.yml` | Monta os pacotes, assina o `.xpi` e publica o Release a cada tag |
 | `.github/release-notes.md` | Esqueleto da nota do Release |
@@ -62,8 +65,9 @@ assina nada.
 | `.github/release-chrome-loja.md` | O bloco do Chrome na nota, se um dia estiver |
 
 Para mudar a cor do contorno e do painel, a constante `ACCENT` no topo de
-`content.js`. Para mudar o texto que abre o export, `PREAMBLE_BASE` no mesmo
-arquivo. Para mudar o atalho, o bloco `commands` do manifesto, ou a própria tela
+`content.js`. Para mudar o texto que abre o export, `PREAMBLE_BASE` em
+`shared.js`. Mexer no formato do export pede mexer junto em `parseExport`, no
+mesmo arquivo, senão a importação para de ler o formato novo. Para mudar o atalho, o bloco `commands` do manifesto, ou a própria tela
 de atalhos do navegador (`chrome://extensions/shortcuts`).
 
 O painel, o contorno e os marcadores vivem num Shadow DOM, que é uma árvore de
@@ -86,7 +90,8 @@ for s in 1 2; do "$CH" --headless --disable-gpu --hide-scrollbars \
 mv docs/shot-1.png docs/comentario.png && mv docs/shot-2.png docs/painel.png
 ```
 
-Funciona porque o `content.js` tem caminho para quando não há extensão. Ele cai
+Funciona porque o `content.js` tem caminho para quando não há extensão, e a
+página carrega o `shared.js` antes dele. Ele cai
 para `localStorage` e expõe `window.__rv.setActive()`.
 
 O conteúdo da página sai borrado de propósito, por um `filter: blur(7px)` aplicado

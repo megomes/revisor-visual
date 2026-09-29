@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Histórico do Revisor Visual</title>
+<link rel="icon" href="icons/32.png">
+<style>
+  :root {
+    --fundo: #0f1115; --cartao: #15171c; --cartao2: #1b1e25; --linha: #2c323a; --linha2: #3a4049;
+    --tinta: #e7e9ee; --fraco: #8b93a1; --fraco2: #b9c0cc; --acento: #ff7a45;
+    --ok: #22c55e; --ok-fundo: rgba(34,197,94,.12); --nao: #ef4444; --nao-fundo: rgba(239,68,68,.12);
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--fundo); color: var(--tinta);
+         font: 14px/1.5 ui-sans-serif, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .topo { position: sticky; top: 0; z-index: 5; background: rgba(15,17,21,.92); backdrop-filter: blur(8px);
+          border-bottom: 1px solid var(--linha); }
+  .topo .in { max-width: 1280px; margin: 0 auto; padding: 14px 20px; display: flex; gap: 14px;
+              align-items: center; flex-wrap: wrap; }
+  .marca { display: flex; align-items: center; gap: 10px; margin-right: auto; }
+  .marca .pt { width: 10px; height: 10px; border-radius: 50%; background: var(--acento); }
+  .marca h1 { font-size: 17px; margin: 0; font-weight: 650; }
+  .marca .resumo { color: var(--fraco); font-size: 12.5px; }
+  .filtros { display: flex; border: 1px solid var(--linha2); border-radius: 8px; overflow: hidden; }
+  .filtros button { background: none; border: 0; color: var(--fraco2); padding: 6px 11px; font-size: 12.5px;
+                    cursor: pointer; border-right: 1px solid var(--linha2); }
+  .filtros button:last-child { border-right: 0; }
+  .filtros button.on { background: var(--cartao2); color: var(--tinta); }
+  .filtros button .c { color: var(--fraco); margin-left: 4px; font-size: 11.5px; }
+  button.b { background: #262b33; color: var(--tinta); border: 1px solid var(--linha2); border-radius: 7px;
+             padding: 6px 11px; font-size: 12.5px; cursor: pointer; white-space: nowrap; }
+  button.b:hover { background: #313843; }
+  button.b.pri { background: var(--acento); border-color: var(--acento); color: #1a1208; font-weight: 600; }
+  button.b.pri:hover { filter: brightness(1.08); }
+  button.b:disabled { opacity: .4; cursor: default; }
+  button.b.fino { background: none; }
+
+  main { max-width: 1280px; margin: 0 auto; padding: 18px 20px 80px; }
+  .vazio { text-align: center; color: var(--fraco); padding: 80px 20px; line-height: 1.7; }
+  .vazio b { color: var(--tinta); }
+
+  .sessao { background: var(--cartao); border: 1px solid var(--linha); border-radius: 14px; margin-bottom: 18px;
+            overflow: hidden; }
+  .sessao > header { display: flex; gap: 16px; align-items: center; padding: 14px 16px; flex-wrap: wrap;
+                     cursor: pointer; user-select: none; }
+  .sessao > header:hover { background: #181b21; }
+  .sessao .seta { color: var(--fraco); transition: transform .15s; font-size: 12px; width: 12px; }
+  .sessao.aberta .seta { transform: rotate(90deg); }
+  .sessao .quando { font-weight: 650; font-size: 15px; }
+  .sessao .pag { color: var(--fraco2); font-size: 12.5px; max-width: 420px; overflow: hidden;
+                 text-overflow: ellipsis; white-space: nowrap; }
+  .tag { display: inline-block; font-size: 11px; padding: 1px 8px; border-radius: 99px;
+         border: 1px solid var(--linha2); color: var(--fraco2); }
+  .tag.vivo { border-color: var(--acento); color: var(--acento); }
+  .titulo-s { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .titulo-s .l1 { display: flex; gap: 10px; align-items: center; }
+  .progresso { flex: 1; min-width: 200px; display: flex; flex-direction: column; gap: 5px; }
+  .barra { display: flex; height: 8px; border-radius: 99px; overflow: hidden; background: #262b33; }
+  .barra .o { background: var(--ok); }
+  .barra .x { background: var(--nao); }
+  .nums { font-size: 12px; color: var(--fraco); }
+  .nums b { color: var(--tinta); font-weight: 600; }
+  .acoes { display: flex; gap: 8px; flex-wrap: wrap; }
+  .corpo { display: none; border-top: 1px solid var(--linha); padding: 14px; }
+  .sessao.aberta .corpo { display: block; }
+
+  .grade { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 12px; }
+  .item { background: var(--cartao2); border: 1px solid var(--linha); border-radius: 11px; overflow: hidden;
+          display: flex; flex-direction: column; border-left: 4px solid var(--linha2); }
+  .item.ok { border-left-color: var(--ok); }
+  .item.nao { border-left-color: var(--nao); }
+  .foto { height: 150px; background: #0b0d10; display: flex; align-items: center; justify-content: center;
+          border-bottom: 1px solid var(--linha); position: relative; overflow: hidden; }
+  .foto img { width: 100%; height: 100%; object-fit: cover; cursor: zoom-in; }
+  .foto .semfoto { display: flex; flex-direction: column; align-items: center; gap: 4px; color: #4b5563;
+                   font-size: 11.5px; }
+  .foto .semfoto .big { font-size: 34px; font-weight: 700; color: #374151; line-height: 1; }
+  .foto .num { position: absolute; left: 8px; top: 8px; min-width: 24px; height: 24px; padding: 0 6px;
+               border-radius: 12px; background: var(--acento); color: #1a1208; font-weight: 700;
+               font-size: 12px; line-height: 24px; text-align: center; box-shadow: 0 1px 6px rgba(0,0,0,.5); }
+  .foto .selo { position: absolute; right: 8px; top: 8px; font-size: 11px; font-weight: 600; padding: 2px 8px;
+                border-radius: 99px; }
+  .item.ok .selo { background: var(--ok); color: #052e14; }
+  .item.nao .selo { background: var(--nao); color: #fff; }
+  .txt { padding: 10px 12px; flex: 1; display: flex; flex-direction: column; gap: 5px; }
+  .alvo { font: 600 11px/1.4 ui-monospace, Menlo, monospace; color: var(--fraco2); overflow: hidden;
+          text-overflow: ellipsis; white-space: nowrap; }
+  .ancora { font-size: 12px; color: var(--fraco); overflow: hidden; display: -webkit-box;
+            -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  .pedido { font-size: 14px; line-height: 1.5; white-space: pre-wrap; }
+  .meta { font-size: 11px; color: var(--fraco); margin-top: auto; padding-top: 4px; }
+  .pe { display: flex; gap: 6px; padding: 8px 10px; border-top: 1px solid var(--linha); background: #171a20; }
+  .pe button { flex: 1; }
+  .pe button.sim.on { background: var(--ok-fundo); border-color: var(--ok); color: #86efac; }
+  .pe button.nao.on { background: var(--nao-fundo); border-color: var(--nao); color: #fca5a5; }
+
+  dialog { background: var(--cartao); color: var(--tinta); border: 1px solid var(--linha2); border-radius: 12px;
+           padding: 0; width: min(760px, 94vw); }
+  dialog::backdrop { background: rgba(0,0,0,.6); }
+  dialog .in { padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+  dialog h2 { margin: 0; font-size: 16px; }
+  dialog p { margin: 0; color: var(--fraco2); font-size: 13px; }
+  dialog textarea { width: 100%; height: 50vh; background: #0e1014; color: var(--tinta); border: 1px solid var(--linha2);
+                    border-radius: 8px; padding: 10px; font: 12px/1.45 ui-monospace, Menlo, monospace; resize: vertical; }
+  dialog .rod { display: flex; gap: 8px; justify-content: flex-end; align-items: center; }
+  dialog .rod .msg { margin-right: auto; font-size: 12.5px; color: var(--fraco2); }
+  .zoom { position: fixed; inset: 0; background: rgba(0,0,0,.82); display: none; align-items: center;
+          justify-content: center; z-index: 20; cursor: zoom-out; padding: 30px; }
+  .zoom.on { display: flex; }
+  .zoom img { max-width: 100%; max-height: 100%; border-radius: 8px; box-shadow: 0 20px 60px rgba(0,0,0,.6); }
+  .aviso { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); background: var(--cartao);
+           border: 1px solid var(--acento); border-radius: 8px; padding: 8px 14px; font-size: 13px; z-index: 30;
+           box-shadow: 0 10px 30px rgba(0,0,0,.6); }
+  @media (max-width: 640px) {
+    .topo .in, main { padding-left: 16px; padding-right: 16px; }
+    .sessao .pag { max-width: 70vw; }
+  }
+</style>
+</head>
+<body>
+<div class="topo"><div class="in">
+  <div class="marca"><span class="pt"></span><div><h1>Histórico de revisões</h1><div class="resumo" id="resumo"></div></div></div>
+  <div class="filtros" id="filtros">
+    <button data-f="pendente" class="on">Sem conferir<span class="c"></span></button>
+    <button data-f="nao">Não ficou<span class="c"></span></button>
+    <button data-f="ok">Ficou<span class="c"></span></button>
+    <button data-f="todos">Todos<span class="c"></span></button>
+  </div>
+  <button class="b" id="importar">Importar export</button>
+</div></div>
+<main id="lista"></main>
+
+<dialog id="dlg"><div class="in">
+  <h2>Importar um export colado</h2>
+  <p>Cole aqui o texto que o botão Copiar tudo gerou, de uma rodada ou de várias em sequência. Cada rodada vira uma sessão. Colar a mesma rodada de novo não duplica.</p>
+  <textarea id="txt" placeholder="# Revisão visual: ..."></textarea>
+  <div class="rod"><span class="msg" id="msg"></span><button class="b" id="cancela">Fechar</button><button class="b pri" id="vai">Importar</button></div>
+</div></dialog>
+<div class="zoom" id="zoom"><img alt=""></div>
+
+<script src="shared.js"></script>
+<script src="db.js"></script>
+<script src="history.js"></script>
+</body>
+</html>
