@@ -10,7 +10,11 @@
   /* o script roda em todo frame, porque há página cujo conteúdo inteiro mora
      num iframe de outra origem (o Artefato do Claude). Iframe pequeno é anúncio,
      botão de rede social ou widget: sai daqui sem ler nada */
-  const isTop = window.top === window;
+  /* embutido num app (o markdown-viewer, por exemplo): o anfitrião mostra a página
+     num frame isolado e avisa, com window.__rvEmbedded, que este frame é a página
+     inteira. Ele passa a se comportar como o topo: dono do painel desde o início. */
+  const embedded = window.__rvEmbedded === true;
+  const isTop = window.top === window || embedded;
   if (!isTop && (innerWidth < 300 || innerHeight < 200)) return;
 
   const api = globalThis.chrome ?? globalThis.browser;
