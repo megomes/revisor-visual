@@ -147,6 +147,10 @@ URL, since there is no way to know which file produced the page.
 
 Tested against Chrome on Manifest V3 and Firefox 115 or newer.
 
+## License
+
+[MIT](LICENSE)
+
 <br>
 
 <div align="center">
