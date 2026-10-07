@@ -1,142 +1,154 @@
-# Revisor Visual
+<div align="center">
 
-Extensão de navegador para revisar uma página HTML clicando nela, e devolver ao
-Claude Code um texto que diz exatamente onde mexer.
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/banner-dark.png">
+  <source media="(prefers-color-scheme: light)" srcset=".github/assets/banner-light.png">
+  <img alt="Revisor Visual: Alt + click anything on a page and paste one prompt that tells Claude Code exactly where to edit" src=".github/assets/banner-dark.png" width="100%">
+</picture>
 
-Você liga o modo, segura Alt e clica no elemento que está errado. A extensão
-reconhece o que você selecionou, desenha o contorno em volta dele e abre uma
-caixa para você escrever.
+<br>
 
-![Caixa de comentário aberta sobre um título de uma página borrada, com o painel da extensão à direita](docs/comentario.png)
+<img src="https://skillicons.dev/icons?i=js,chrome,firefox" alt="JavaScript, Chrome, Firefox">
 
-No fim, **Copiar tudo** põe na área de transferência um texto pronto para colar no
-Claude. Os marcadores laranjas ficam na página e o painel lista os comentários.
+<br><br>
 
-![Página borrada com dois marcadores laranjas, e o painel da extensão listando os dois comentários](docs/painel.png)
+**A browser extension to review an HTML page by clicking on it,**<br>
+**and hand Claude Code a text that says exactly where to change things.**
 
-Funciona em arquivo local (`file://`), em `localhost`, em qualquer site e em
-Artefato do Claude. Serve para HTML estático e para página gerada por React.
+[Install](#install) · [How to use](#how-to-use) · [What goes to the clipboard](#what-goes-to-the-clipboard) · [Known limits](#known-limits)
 
-## Instalar
+<br>
 
-Baixe na [página de Releases](../../releases/latest). O passo a passo dos dois
-navegadores está na nota da própria versão.
+<img src=".github/assets/demo.gif" alt="Alt + clicking a title, a number and a status pill, writing what is wrong, and the panel listing the three comments" width="100%">
 
-No Firefox é um `.xpi` assinado pela Mozilla, que abre no navegador e instala. No
-Chrome é um `.zip` que você descompacta e carrega pelo `chrome://extensions`,
-porque a extensão não está na Chrome Web Store.
+</div>
 
-Para mexer no código, publicar versão nova ou entender os arquivos, veja o
+<br>
+
+Turn review mode on, hold **Alt** and click the element that is wrong. The extension
+figures out what you picked, outlines it and opens a box for you to write. At the end,
+**Copy all** puts a ready-to-paste prompt for Claude on the clipboard. The orange markers
+stay on the page and the panel lists every comment.
+
+<img src=".github/assets/panel.png" alt="A page with three orange markers and the extension panel listing the three comments" width="100%">
+
+It works on local files (`file://`), on `localhost`, on any site and inside Claude
+Artifacts, for static HTML and for React-generated pages alike.
+
+> [!NOTE]
+> The extension's interface is in Brazilian Portuguese. The page in the screenshots is a
+> made-up report.
+
+## Install
+
+Download it from the [Releases page](../../releases/latest). Each release note has the
+step-by-step for both browsers.
+
+- **Firefox:** a `.xpi` signed by Mozilla. Open it in the browser and it installs.
+- **Chrome:** a `.zip` you unzip and load from `chrome://extensions`, since the extension
+  is not on the Chrome Web Store.
+
+To work on the code, publish a new version or understand the files, see
 [CONTRIBUTING.md](CONTRIBUTING.md).
 
-## Como usar
+## How to use
 
-| O que você faz | O que acontece |
-| --- | --- |
-| `Alt+Shift+R`, ou clique no ícone da barra | Liga e desliga o modo de revisão |
-| Segurar **Alt** (Option no Mac) | Mostra o contorno do elemento sob o cursor |
-| **Alt + clique** | Abre a caixa de comentário naquele elemento |
-| Selecionar um trecho e **Alt + clique** | Marca só o trecho, não o parágrafo inteiro |
-| **Seta para cima** e **para baixo**, com Alt | Sobe e desce na árvore: do `span` para o cartão inteiro |
-| **Enter** na caixa | Salva. `Shift+Enter` quebra linha, `Esc` cancela |
-| Clique no número laranja na página | Reabre o comentário para editar |
-| **Esc** com o modo ligado | Desliga o modo |
-| **Limpar**, duas vezes | Guarda a sessão no histórico e esvazia o painel |
-| **Histórico**, no topo do painel | Troca a lista do painel pelas sessões anteriores, para conferir item a item |
+| What you do                                         | What happens                                                        |
+| --------------------------------------------------- | ------------------------------------------------------------------- |
+| `Alt+Shift+R`, or the toolbar icon                  | Turns review mode on and off                                        |
+| Hold **Alt** (Option on Mac)                        | Outlines the element under the cursor                               |
+| **Alt + click**                                     | Opens the comment box on that element                               |
+| Select some text, then **Alt + click**              | Marks only that passage, not the whole paragraph                    |
+| **Arrow up** / **down**, with Alt                   | Walks up and down the tree: from a `span` to the whole card         |
+| **Enter** in the box                                | Saves. `Shift+Enter` adds a line, `Esc` cancels                     |
+| Click an orange number on the page                  | Reopens that comment to edit it                                     |
+| **Esc** with review mode on                         | Turns review mode off                                               |
+| **Clear**, twice                                    | Saves the session to history and empties the panel                  |
+| **History**, at the top of the panel                | Swaps the panel list for past sessions, to check them item by item  |
 
-O painel tem uma opção **clique simples anota**, para quando você estiver numa
-passada longa e não precisar navegar pela página. O modificador também é
-configurável ali, se Alt colidir com alguma coisa.
+The panel has a **single click annotates** option for long passes where you do not need to
+navigate the page, and the modifier key is configurable there if Alt clashes with
+something.
 
-Os comentários não morrem ao recarregar, ao clicar num link ou ao trocar de
-arquivo. A sessão é uma só, a numeração é corrida, e o painel mostra os itens
-desta página em cima e os das outras embaixo. Depois que o Claude reescreve o
-arquivo e você recarrega, o marcador de um comentário cujo elemento não existe
-mais fica cinza, e o item continua na lista.
+Comments survive reloads, links and switching files. There is one session with continuous
+numbering, and the panel shows this page's items first and the other pages' below. After
+Claude rewrites the file and you reload, a comment whose element no longer exists turns
+gray and stays on the list.
 
-## Histórico e conferência
+## History and checking
 
-O histórico guarda cada sessão com uma foto de cada item, para você conferir
-depois, item a item, se o Claude aplicou o pedido. Uma sessão é o que está no
-painel entre um **Limpar** e o próximo.
+History keeps every session with a snapshot of each item, so you can check afterwards,
+item by item, whether Claude applied the request. A session is whatever is in the panel
+between one **Clear** and the next. It is saved when you copy, when you clear and when you
+turn review mode off; the open session shows up in history too.
 
-A sessão vai para o histórico em três momentos: quando você copia, quando limpa e
-quando desliga o modo. A sessão que ainda está no painel também aparece no
-histórico, marcada como aberta. A foto é recortada da aba no momento em que você
-salva o item, com o contorno laranja em volta do elemento.
+Each session has a progress bar of checked items, and each item has **✓** for done and
+**✗** for not done. Clicking an item on this page scrolls to it; clicking an item on
+another page takes the tab there. The element is highlighted, and a card in the bottom
+left shows the request and the snapshot from before. If the element is gone, or there is
+different text in the same place now, the card says so.
 
-O botão **Histórico**, no topo do painel, mostra as sessões no próprio painel,
-em cima da página, sem trocar de aba. Cada sessão tem uma barra de quantos itens
-já foram conferidos, e cada item tem **✓** para ficou e **✗** para não ficou.
-Clicar num item desta página rola até ele. Clicar num item de outra página leva
-esta aba até lá.
+**Full page** opens history in its own tab with large snapshots. **Copy the ones not done**
+builds the prompt again with only the items marked as not done. **Import export** reads a
+prompt you already pasted into Claude and creates one session per copy, without snapshots.
+Importing the same copy twice does not duplicate anything.
 
-O elemento aparece destacado, e um cartão no canto inferior esquerdo mostra o
-pedido e a foto de antes. **Ficou** e **Não ficou** registram e
-já levam ao próximo item sem conferência. Se o elemento sumiu da página, o cartão
-avisa. Se no mesmo lugar agora há outro texto, o cartão mostra o texto novo.
+History and snapshots stay in this browser, in the extension's storage, and never leave it.
 
-**Página inteira**, no painel do histórico, abre o histórico numa aba própria,
-com as fotos grandes. Ali, **Copiar os que não ficaram** monta de novo o texto
-para o Claude, só com os itens marcados como **Não ficou**. **Importar export** lê o texto que você já colou no
-Claude antes, de uma cópia ou de várias em sequência, e cria uma sessão por cópia,
-sem foto. Importar a mesma cópia duas vezes não duplica nada.
-
-O histórico e as fotos ficam só neste navegador, no armazenamento da extensão, e
-não saem dele.
-
-## O que sai na área de transferência
+## What goes to the clipboard
 
 ```
 # Revisão visual: 2 itens em 1 página
-Gerado em 2026-09-18 14:09.
+Gerado em 2026-10-06 14:09.
 
 Cada item traz uma âncora, que é o texto como ele aparece na página e, em geral,
 literalmente no arquivo fonte, mais um caminho CSS que confirma o alvo. Ache o
 trecho pela âncora, confirme pelo caminho e aplique o pedido. Não altere nada
 fora do que está listado.
 
-## Página 1: AS-IS da Máquina de Localização
-Arquivo: /Users/reasset/Documents/.../1 - AS-IS/AS-IS.html
+## Página 1: Pebble Notes · Q3 Product Review
+Arquivo: /Users/you/Documents/reports/q3-review.html
 
-### 1 · título <h2 class="sec-title"> em section#diagnostico
-Âncora: "Cobertura por safra"
-Caminho: section#diagnostico > h2.sec-title
-Atenção: esse texto aparece 2 vezes na página. Desempate pelo caminho.
-Pedido: o título não diz o efeito. Trocar por um que diga o que a seção prova.
+### 1 · título <h2 class="sec-title"> em section#growth
+Âncora: "Growth by channel"
+Caminho: section#growth > h2.sec-title
+Pedido: The title does not say the finding. Say what the numbers prove.
 ```
 
-Três decisões de formato, que são o motivo de o texto funcionar:
+Three format decisions are why the prompt works:
 
-- **A âncora vem primeiro**, porque é o que o Claude sabe procurar. Seletor CSS de
-  página React (`css-1x9f3k7`) não existe no código fonte, então sozinho não serve
-  de endereço. Texto literal serve.
-- **O caminho desempata, não endereça.** A extensão sobe a árvore até o caminho
-  identificar o elemento sozinho, e confere contra a página antes de exportar.
-  Texto repetido ganha a linha de "Atenção".
-- **Elemento sem texto ganha ponto de referência.** Ícone e imagem sem `alt` não
-  têm âncora, então entra o rótulo curto mais próximo, dizendo qual dos dois é.
+- **The anchor comes first**, because it is what Claude knows how to search for. A CSS
+  class from a React build (`css-1x9f3k7`) does not exist in the source, so on its own it
+  is not an address. Literal text is.
+- **The path breaks ties, it does not address.** The extension walks up the tree until
+  the path identifies the element on its own, and checks it against the page before
+  exporting. Repeated text gets an `Atenção` (watch out) line.
+- **Elements without text get a landmark.** Icons and images without `alt` have no
+  anchor, so the nearest short label goes in, saying which one it is.
 
-O arquivo aparece como caminho absoluto no disco quando a página é `file://`. Em
-`localhost` sai a URL, porque não dá para saber o arquivo que gerou a página.
+The file shows up as an absolute path on disk for `file://` pages. On `localhost` it is the
+URL, since there is no way to know which file produced the page.
 
-## Limites conhecidos
+## Known limits
 
-- **Não abre o arquivo nem edita nada.** Ela só descreve. Quem mexe é o Claude.
-- **O texto para o Claude não leva imagem.** Imagem custa muito token e, na
-  prática, a âncora mais o caminho já bastam. A foto de cada item serve só ao
-  histórico.
-- **A foto sai da parte visível da aba.** Elemento maior que a tela sai cortado, e
-  o painel sai junto se estiver por cima do elemento.
-- **Em React de produção não há mapeamento para linha do fonte.** O `_debugSource`
-  do React só existe em build de desenvolvimento, e lê-lo exigiria rodar script no
-  mesmo mundo de JavaScript da página, o que o Chrome permite e o Firefox ainda
-  não.
-- **Só revisa um frame por aba.** Quando um `iframe` cobre metade da janela ou
-  mais, como no Artefato do Claude, a revisão acontece dentro dele e o resto da
-  página fica de fora. Um `iframe` menor, como um vídeo no meio de um artigo, fica
-  de fora, e a revisão é da página em volta.
-- **Não roda em página interna do navegador** (`chrome://`, `about:`), nem na loja
-  de extensões. É restrição do navegador, não da extensão.
+- **It does not open or edit any file.** It only describes. Claude does the editing.
+- **The prompt carries no images.** Images cost a lot of tokens and, in practice, anchor
+  plus path is enough. Snapshots are for history only.
+- **Snapshots come from the visible part of the tab.** An element taller than the screen
+  gets cut, and the panel shows up if it is on top of the element.
+- **No source-line mapping in production React.** React's `_debugSource` only exists in
+  development builds, and reading it would require running in the page's own JavaScript
+  world, which Chrome allows and Firefox does not yet.
+- **One frame per tab.** When an `iframe` covers half the window or more, as in a Claude
+  Artifact, the review happens inside it. A smaller `iframe`, like a video in an article,
+  is left out.
+- **It does not run on internal browser pages** (`chrome://`, `about:`) or extension
+  stores. That is a browser restriction.
 
-Atualizado em 2026-09-29, contra Chrome no Manifest V3 e Firefox 115 ou mais novo.
+Tested against Chrome on Manifest V3 and Firefox 115 or newer.
+
+<br>
+
+<div align="center">
+<sub>Built by <a href="https://github.com/megomes">Matheus Ervilha</a> to review the pages Claude writes without describing them in words.</sub>
+</div>
